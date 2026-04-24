@@ -11,6 +11,7 @@ rust/**/*.rs.bk
 
 # IDE files
 **/.idea
+**/.vscode
 
 # Python bytecode cache
 **/__pycache__
