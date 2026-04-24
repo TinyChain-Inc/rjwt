@@ -123,8 +123,7 @@ impl<A> Actor<A> {
         A: Serialize + Clone,
         C: Serialize + Clone,
     {
-        let (token, claims) =
-            Token::consume(token, now, host_id.clone(), self.id.clone(), claims)?;
+        let (token, claims) = Token::consume(token, now, host_id.clone(), self.id.clone(), claims)?;
         let token = self.sign_token_inner(&token)?;
         Ok(SignedToken::new(claims, token))
     }

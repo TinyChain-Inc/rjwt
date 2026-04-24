@@ -4,13 +4,13 @@ use std::time::SystemTime;
 
 use ed25519_dalek::Verifier;
 use futures::Future;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::actor::Actor;
 use crate::claims::Claims;
 use crate::error::{Error, ErrorKind};
-use crate::token::{decode_token, token_signature, SignedToken, Token};
+use crate::token::{SignedToken, Token, decode_token, token_signature};
 
 type ResolveResult<A> = Result<Actor<A>, Error>;
 type VerifyResult<H, A, C> = Result<SignedToken<H, A, C>, Error>;

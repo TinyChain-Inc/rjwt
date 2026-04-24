@@ -1,5 +1,5 @@
-use std::{fmt, time::SystemTimeError};
 use ed25519_dalek::SignatureError;
+use std::{fmt, time::SystemTimeError};
 
 /// The category of error returned by a JWT operation
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
