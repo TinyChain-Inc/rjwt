@@ -141,7 +141,7 @@ mod token;
 pub use actor::Actor;
 pub use claims::{Claims, Iter};
 pub use ed25519_dalek::{Signature, SigningKey, VerifyingKey};
-pub use error::{Error, ErrorKind};
+pub use error::Error;
 pub use rand::rngs::OsRng;
 pub use resolve::Resolve;
 pub use token::{SignedToken, Token};

@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 
 use crate::actor::Actor;
 use crate::claims::Claims;
-use crate::error::{Error, ErrorKind};
+use crate::error::Error;
 use crate::token::{SignedToken, Token, decode_token, token_signature};
 
 type ResolveResult<A> = Result<Actor<A>, Error>;
@@ -59,7 +59,7 @@ where
     let token: Token<R::HostId, R::ActorId, R::Claims> = decode_token(message)?;
 
     if token.is_expired(now) {
-        return Err(Error::new(ErrorKind::Time, "token is expired".into()));
+        return Err(Error::Time("token is expired".to_owned()));
     }
 
     let actor = resolver.resolve(&token.iss, &token.actor_id).await?;
@@ -95,9 +95,8 @@ where
             if token.exp <= parent_claims.exp {
                 parent_claims.consume(token.iss, token.actor_id, token.custom)
             } else {
-                Err(Error::new(
-                    ErrorKind::Time,
-                    "cannot extend the expiration time of a recursive token".into(),
+                Err(Error::Time(
+                    "cannot extend the expiration time of a recursive token".to_owned(),
                 ))
             }
         } else {

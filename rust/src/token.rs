@@ -7,7 +7,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::claims::Claims;
-use crate::error::{Error, ErrorKind};
+use crate::error::Error;
 
 #[derive(Eq, PartialEq, Debug, Deserialize, Serialize)]
 pub(crate) struct TokenHeader {
@@ -160,7 +160,7 @@ pub(crate) fn token_signature(encoded: &str) -> Result<(&str, Signature), Error>
 
     let signature = BASE64_STANDARD
         .decode(&encoded[(i + 1)..])
-        .map_err(|e| Error::new(ErrorKind::Base64, e.to_string()))?;
+        .map_err(|e| Error::Base64(e.to_string()))?;
 
     let signature = Signature::try_from(&signature[..])?;
 
