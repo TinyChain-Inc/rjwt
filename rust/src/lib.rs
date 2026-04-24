@@ -15,7 +15,6 @@
 //! ```
 //! # use std::collections::HashMap;
 //! # use std::time::{Duration, SystemTime};
-//! # use async_trait::async_trait;
 //! # use futures::executor::block_on;
 //! use rjwt::*;
 //!
@@ -32,19 +31,23 @@
 //! #    }
 //! # }
 //!
-//! #[async_trait]
 //! impl Resolve for Resolver {
 //!     type HostId = String;
 //!     type ActorId = String;
 //!     type Claims = String;
 //!
-//!     async fn resolve(&self, host: &Self::HostId, actor_id: &Self::ActorId) -> Result<Actor<Self::ActorId>, Error> {
-//!         if host == &self.hostname {
-//!             self.actors.get(actor_id).cloned().ok_or_else(|| Error::fetch(actor_id))
-//!         } else if let Some(peer) = self.peers.iter().filter(|p| &p.hostname == host).next() {
-//!             peer.resolve(host, actor_id).await
-//!         } else {
-//!             Err(Error::fetch(host))
+//!     fn resolve(&self, host: &Self::HostId, actor_id: &Self::ActorId)
+//!         -> impl Future<Output = Result<Actor<Self::ActorId>, Error>> + Send
+//!     {
+//!         let this = self;
+//!         async move {
+//!             if host == &this.hostname {
+//!                 this.actors.get(actor_id).cloned().ok_or_else(|| Error::fetch(actor_id))
+//!             } else if let Some(peer) = this.peers.iter().filter(|p| &p.hostname == host).next() {
+//!                 Box::pin(peer.resolve(host, actor_id)).await
+//!             } else {
+//!                 Err(Error::fetch(host))
+//!             }
 //!         }
 //!     }
 //! }
@@ -133,7 +136,6 @@ use std::fmt;
 use std::pin::Pin;
 use std::time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH};
 
-use async_trait::async_trait;
 use base64::prelude::*;
 use ed25519_dalek::{SignatureError, Signer, Verifier};
 use futures::Future;
@@ -228,40 +230,45 @@ impl From<SystemTimeError> for Error {
     }
 }
 
+type ResolveResult<A> = Result<Actor<A>, Error>;
+type VerifyResult<H, A, C> = Result<SignedToken<H, A, C>, Error>;
+
 /// Trait which defines how to fetch an [`Actor`] given its host and ID
-#[async_trait]
 pub trait Resolve: Send + Sync {
     type HostId: Serialize + DeserializeOwned + fmt::Debug + Send + Sync;
     type ActorId: Serialize + DeserializeOwned + fmt::Debug + Send + Sync;
     type Claims: Serialize + DeserializeOwned + Send + Sync;
 
     /// Given a host and actor ID, return a corresponding [`Actor`].
-    async fn resolve(
+    fn resolve(
         &self,
         host: &Self::HostId,
         actor_id: &Self::ActorId,
-    ) -> Result<Actor<Self::ActorId>, Error>;
+    ) -> impl Future<Output = ResolveResult<Self::ActorId>> + Send;
 
     /// Decode and verify the given `encoded` token.
-    async fn verify(
+    fn verify(
         &self,
         encoded: String,
         now: SystemTime,
-    ) -> Result<SignedToken<Self::HostId, Self::ActorId, Self::Claims>, Error>
+    ) -> impl Future<Output = VerifyResult<Self::HostId, Self::ActorId, Self::Claims>> + Send
     where
         Self::ActorId: PartialEq,
     {
-        let claims = verify_claims(self, &encoded, now).await?;
-        Ok(SignedToken::new(claims, encoded))
+        async move {
+            let claims = verify_claims(self, &encoded, now).await?;
+            Ok(SignedToken::new(claims, encoded))
+        }
     }
 }
 
-async fn decode_and_verify_token<R: Resolve + ?Sized>(
+async fn decode_and_verify_token<R>(
     resolver: &R,
     encoded: &str,
     now: SystemTime,
 ) -> Result<Token<R::HostId, R::ActorId, R::Claims>, Error>
 where
+    R: Resolve + ?Sized,
     R::ActorId: PartialEq,
 {
     let (message, signature) = token_signature(encoded)?;
