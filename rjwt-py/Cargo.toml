@@ -1,0 +1,26 @@
+[package]
+name = "rjwt-py"
+version = "0.1.0"
+edition = "2024"
+authors = ["code@tinychain.net"]
+description = "Python bindings for rjwt crate"
+license = "Apache-2.0"
+repository = "https://github.com/haydnv/rjwt.git"
+
+keywords = ["jwt", "recursive", "oauth", "token", "scope"]
+categories = ["authentication", "web-programming"]
+
+[lib]
+name = "rjwt_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+rjwt = { path = "../core" }
+pyo3 = { version = "0.23", features = ["extension-module"] }
+pyo3-async-runtimes = { version = "0.23", features = ["tokio-runtime"] }
+tokio = { version = "1", features = ["full"] }
+ed25519-dalek = "2.1"
+hr-id = { version = "0.7", features = ["serde"] }
+pathlink = { version = "0.4", features = ["serialize"] }
+umask = "2.1"
+serde = { version = "1", features = ["derive"] }

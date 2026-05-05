@@ -1,0 +1,13 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "rjwt-py"
+version = "0.1.0"
+description = "Python bindings for rjwt — a recursive JWT library with ECDSA signatures"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+
+[tool.maturin]
+module-name = "rjwt_py"
