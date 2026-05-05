@@ -446,7 +446,7 @@ impl PyResolver {
 // ── Module ───────────────────────────────────────────────────────────────────
 
 #[pymodule]
-fn rjwt_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn rjwt(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyActor>()?;
     m.add_class::<PyToken>()?;
     m.add_class::<PySignedToken>()?;

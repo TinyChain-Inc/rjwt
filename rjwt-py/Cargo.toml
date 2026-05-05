@@ -11,7 +11,7 @@ keywords = ["jwt", "recursive", "oauth", "token", "scope"]
 categories = ["authentication", "web-programming"]
 
 [lib]
-name = "rjwt_py"
+name = "rjwt"
 crate-type = ["cdylib"]
 
 [dependencies]
