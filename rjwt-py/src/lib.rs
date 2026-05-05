@@ -82,7 +82,6 @@ use serde::{Deserialize, Serialize};
 use umask::Mode;
 
 use ::rjwt::Error;
-use resolve::PyResolver;
 
 /// Host identifier type: a typed URL / host address.
 pub(crate) type H = Link;
@@ -120,7 +119,9 @@ pub(crate) fn unix_to_system_time(unix_secs: f64) -> SystemTime {
 }
 
 pub(crate) fn system_time_to_unix(t: SystemTime) -> f64 {
-    t.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs_f64()
+    t.duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64()
 }
 
 /// Convert a Python `dict[str, int]` to `HashMap<LinkBuf, SerMode>`.
@@ -157,6 +158,6 @@ fn rjwt(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<token::PyToken>()?;
     m.add_class::<token::PySignedToken>()?;
     m.add_class::<claims::PyClaims>()?;
-    m.add_class::<PyResolver>()?;
+    m.add_class::<resolve::PyResolver>()?;
     Ok(())
 }

@@ -5,9 +5,9 @@ use pyo3_async_runtimes::tokio::future_into_py;
 
 use ::rjwt::{Actor, Error, Resolve};
 
-use crate::token::PySignedToken;
-use crate::{to_py_err, unix_to_system_time, A, C, H};
 use crate::actor::PyActor;
+use crate::token::PySignedToken;
+use crate::{A, C, H, to_py_err, unix_to_system_time};
 
 struct InnerResolver {
     py_obj: Py<PyAny>,
@@ -47,7 +47,9 @@ impl Resolve for InnerResolver {
                     .map_err(|e: PyErr| Error::fetch(e.to_string()))
             })?;
 
-            let result = future.await.map_err(|e: PyErr| Error::fetch(e.to_string()))?;
+            let result = future
+                .await
+                .map_err(|e: PyErr| Error::fetch(e.to_string()))?;
 
             // Extract the PyActor returned by Python.
             // Actor::clone() strips the private key, returning a public-key-only

@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 
 use ::rjwt::Claims;
 
-use crate::{claims_to_py, A, C, H};
+use crate::{A, C, H, claims_to_py};
 
 /// The chain of claims carried by a SignedToken, from newest to oldest.
 #[pyclass(name = "Claims")]

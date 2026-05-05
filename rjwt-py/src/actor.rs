@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use ::rjwt::{Actor, SigningKey, VerifyingKey};
 
 use crate::token::{PySignedToken, PyToken};
-use crate::{py_to_claims, to_py_err, unix_to_system_time, A};
+use crate::{A, py_to_claims, to_py_err, unix_to_system_time};
 
 /// An actor with an [`hr_id::Id`] identifier and an ECDSA keypair used to sign tokens.
 ///
@@ -31,7 +31,10 @@ impl PyActor {
         let bytes: [u8; 32] = private_key
             .try_into()
             .map_err(|_| PyValueError::new_err("private key must be exactly 32 bytes"))?;
-        Ok(Self(Actor::with_keypair(id, SigningKey::from_bytes(&bytes))))
+        Ok(Self(Actor::with_keypair(
+            id,
+            SigningKey::from_bytes(&bytes),
+        )))
     }
 
     /// Create an Actor from a 32-byte Ed25519 public key (verify-only, cannot sign).
@@ -81,8 +84,7 @@ impl PyActor {
         claims: &Bound<'_, PyAny>,
         now_unix: f64,
     ) -> PyResult<PySignedToken> {
-        let host_id =
-            Link::from_str(host_id).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let host_id = Link::from_str(host_id).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let claims = py_to_claims(claims)?;
         let now = unix_to_system_time(now_unix);
         self.0
