@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 use ::rjwt::{Actor, SigningKey, VerifyingKey};
 
 use crate::token::{PySignedToken, PyToken};
-use crate::{A, py_to_claims, to_py_err, unix_to_system_time};
+use crate::{A, H, py_to_claims, to_py_err, unix_to_system_time};
 
 /// An actor with an [`hr_id::Id`] identifier and an ECDSA keypair used to sign tokens.
 ///
@@ -83,7 +83,7 @@ impl PyActor {
         claims: &Bound<'_, PyAny>,
         now_unix: f64,
     ) -> PyResult<PySignedToken> {
-        let host_id = host_id.to_string();
+        let host_id = H::from_str(host_id).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let claims = py_to_claims(claims)?;
         let now = unix_to_system_time(now_unix);
         self.0

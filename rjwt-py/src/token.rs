@@ -31,7 +31,7 @@ impl PyToken {
         actor_id: &str,
         claims: &Bound<'_, PyAny>,
     ) -> PyResult<Self> {
-        let iss = iss.to_string();
+        let iss = H::from_str(iss).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let actor_id = A::from_str(actor_id).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let claims = py_to_claims(claims)?;
         let iat = unix_to_system_time(iat_unix);
