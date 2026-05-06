@@ -25,26 +25,26 @@ async def main():
     now = time.time()
 
     bob = rjwt.Actor("bob")
-    example = ExampleResolver("http://example.com", {"bob": bob})
+    example = ExampleResolver("http://example.com/", {"bob": bob})
 
     app = rjwt.Actor("app")
-    retailer = ExampleResolver("http://retailer.com", {"app": app}, peers=[example])
+    retailer = ExampleResolver("http://retailer.com/", {"app": app}, peers=[example])
 
     bobs_claims = {"/home/bob": 0o755, "/tmp": 0o777}
-    token = rjwt.Token("http://example.com", now, 30.0, "bob", bobs_claims)
+    token = rjwt.Token("http://example.com/", now, 30.0, "bob", bobs_claims)
     bobs_token = bob.sign_token(token)
 
     verified = await rjwt.Resolver(example).verify(bobs_token.jwt(), now)
-    assert verified.claims().get("http://example.com", "bob") == bobs_claims
+    assert verified.claims().get("http://example.com/", "bob") == bobs_claims
 
     app_claims = {"/orders/42": 0o644}
-    retail_token = app.consume_and_sign(verified, "http://retailer.com", app_claims, now)
+    retail_token = app.consume_and_sign(verified, "http://retailer.com/", app_claims, now)
 
-    bank = ExampleResolver("http://bank.com", {}, peers=[example, retailer])
+    bank = ExampleResolver("http://bank.com/", {}, peers=[example, retailer])
     final = await rjwt.Resolver(bank).verify(retail_token.jwt(), now)
 
-    assert final.claims().get("http://example.com", "bob") == bobs_claims
-    assert final.claims().get("http://retailer.com", "app") == app_claims
+    assert final.claims().get("http://example.com/", "bob") == bobs_claims
+    assert final.claims().get("http://retailer.com/", "app") == app_claims
 
     print("All assertions passed.")
 
