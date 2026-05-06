@@ -17,7 +17,7 @@ impl PyClaims {
     ///
     /// The returned value is a ``dict[str, int]`` mapping path strings to mode bits.
     fn get(&self, py: Python<'_>, host: &str, actor_id: &str) -> PyResult<Option<PyObject>> {
-        let h = H::from_str(host).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let h = host.to_string();
         let a = A::from_str(actor_id).map_err(|e| PyValueError::new_err(e.to_string()))?;
         match self.0.get(&h, &a) {
             Some(c) => Ok(Some(claims_to_py(py, c)?)),

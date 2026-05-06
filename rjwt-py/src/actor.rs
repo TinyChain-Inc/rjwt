@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use pathlink::Link;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -74,7 +73,7 @@ impl PyActor {
     ///
     /// Args:
     ///     token:    the parent SignedToken to inherit from
-    ///     host_id:  issuing host for the new segment (str parsed as Link)
+    ///     host_id:  issuing host URL string for the new segment (e.g. ``"http://retailer.com"``)
     ///     claims:   new claims dict[str, int] (path → mode bits)
     ///     now_unix: current time as Unix timestamp (float seconds)
     fn consume_and_sign(
@@ -84,7 +83,7 @@ impl PyActor {
         claims: &Bound<'_, PyAny>,
         now_unix: f64,
     ) -> PyResult<PySignedToken> {
-        let host_id = Link::from_str(host_id).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let host_id = host_id.to_string();
         let claims = py_to_claims(claims)?;
         let now = unix_to_system_time(now_unix);
         self.0

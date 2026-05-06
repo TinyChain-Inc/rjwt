@@ -33,33 +33,33 @@
 //!
 //!     # Bob is a user on example.com.
 //!     bob = rjwt.Actor("bob")
-//!     example = ExampleResolver("example.com", {"bob": bob})
+//!     example = ExampleResolver("http://example.com", {"bob": bob})
 //!
 //!     # The retailer.com app acts on Bob's behalf.
 //!     app = rjwt.Actor("app")
-//!     retailer = ExampleResolver("retailer.com", {"app": app}, peers=[example])
+//!     retailer = ExampleResolver("http://retailer.com", {"app": app}, peers=[example])
 //!
 //!     # example.com issues a token granting Bob access to specific paths.
 //!     # Claims are expressed as {path_str: octal_mode_int}.
 //!     bobs_claims = {"/home/bob": 0o755, "/tmp": 0o777}
-//!     token = rjwt.Token("example.com", now, 30.0, "bob", bobs_claims)
+//!     token = rjwt.Token("http://example.com", now, 30.0, "bob", bobs_claims)
 //!     bobs_token = bob.sign_token(token)
 //!
 //!     # retailer.com verifies the token and reads Bob's claims.
 //!     verified = await rjwt.Resolver(example).verify(bobs_token.jwt(), now)
-//!     assert verified.claims().get("example.com", "bob") == bobs_claims
+//!     assert verified.claims().get("http://example.com", "bob") == bobs_claims
 //!
 //!     # retailer.com adds its own claim and re-signs.
 //!     app_claims = {"/orders/42": 0o644}
-//!     retail_token = app.consume_and_sign(verified, "retailer.com", app_claims, now)
+//!     retail_token = app.consume_and_sign(verified, "http://retailer.com", app_claims, now)
 //!
 //!     # Bob's bank verifies the full chain.
-//!     bank = ExampleResolver("bank.com", {}, peers=[example, retailer])
+//!     bank = ExampleResolver("http://bank.com", {}, peers=[example, retailer])
 //!     final = await rjwt.Resolver(bank).verify(retail_token.jwt(), now)
 //!
 //!     # Both claim segments are accessible.
-//!     assert final.claims().get("example.com", "bob") == bobs_claims
-//!     assert final.claims().get("retailer.com", "app") == app_claims
+//!     assert final.claims().get("http://example.com", "bob") == bobs_claims
+//!     assert final.claims().get("http://retailer.com", "app") == app_claims
 //!
 //! asyncio.run(main())
 //! ```
@@ -74,7 +74,7 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use hr_id::Id;
-use pathlink::{Link, PathBuf as LinkBuf};
+use pathlink::PathBuf as LinkBuf;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -83,8 +83,8 @@ use umask::Mode;
 
 use ::rjwt::Error;
 
-/// Host identifier type: a typed URL / host address.
-pub(crate) type H = Link;
+/// Host identifier type: a URL string (e.g. ``"http://example.com"``).
+pub(crate) type H = String;
 /// Actor identifier type: a human-readable, reference-counted string id.
 pub(crate) type A = Id;
 /// Claims payload type: a map of path → POSIX permission bits.

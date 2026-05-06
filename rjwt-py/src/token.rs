@@ -1,7 +1,6 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use pathlink::Link;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -19,7 +18,7 @@ impl PyToken {
     /// Construct a token.
     ///
     /// Args:
-    ///     iss:       issuing host (str parsed as Link, e.g. ``"example.com"``)
+    ///     iss:       issuing host URL string (e.g. ``"http://example.com"``)
     ///     iat_unix:  issue time as a Unix timestamp (float seconds)
     ///     ttl_secs:  time-to-live in seconds
     ///     actor_id:  actor identifier (str parsed as Id)
@@ -32,7 +31,7 @@ impl PyToken {
         actor_id: &str,
         claims: &Bound<'_, PyAny>,
     ) -> PyResult<Self> {
-        let iss = Link::from_str(iss).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let iss = iss.to_string();
         let actor_id = A::from_str(actor_id).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let claims = py_to_claims(claims)?;
         let iat = unix_to_system_time(iat_unix);
