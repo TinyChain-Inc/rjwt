@@ -10,6 +10,9 @@ repository = "https://github.com/haydnv/rjwt.git"
 keywords = ["jwt", "recursive", "oauth", "token", "scope"]
 categories = ["authentication", "web-programming"]
 
+[lib]
+name = "rjwt_core"
+
 [dependencies]
 base64 = "0.22"
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
