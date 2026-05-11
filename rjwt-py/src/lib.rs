@@ -81,7 +81,7 @@ use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
 use umask::Mode;
 
-use ::rjwt::Error;
+use ::rjwt_core::Error;
 
 /// Host identifier type: a typed URL / host address.
 pub(crate) type H = Link;
@@ -142,7 +142,7 @@ pub(crate) fn py_to_claims(obj: &Bound<'_, PyAny>) -> PyResult<C> {
 }
 
 /// Convert `BTreeMap<LinkBuf, SerMode>` to a Python `dict[str, int]`.
-pub(crate) fn claims_to_py(py: Python<'_>, claims: &C) -> PyResult<PyObject> {
+pub(crate) fn claims_to_py(py: Python<'_>, claims: &C) -> PyResult<Py<PyAny>> {
     let dict = PyDict::new(py);
     for (path, mode) in claims {
         dict.set_item(path.to_string(), mode.0)?;
@@ -161,3 +161,5 @@ fn rjwt(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<resolve::PyResolver>()?;
     Ok(())
 }
+
+pyo3_stub_gen::define_stub_info_gatherer!(stub_info);

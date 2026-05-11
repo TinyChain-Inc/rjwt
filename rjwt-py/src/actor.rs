@@ -2,8 +2,9 @@ use std::str::FromStr;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
-use ::rjwt::{Actor, SigningKey, VerifyingKey};
+use ::rjwt_core::{Actor, SigningKey, VerifyingKey};
 
 use crate::token::{PySignedToken, PyToken};
 use crate::{A, H, py_to_claims, to_py_err, unix_to_system_time};
@@ -11,9 +12,11 @@ use crate::{A, H, py_to_claims, to_py_err, unix_to_system_time};
 /// An actor with an [`hr_id::Id`] identifier and an ECDSA keypair used to sign tokens.
 ///
 /// Cloning an Actor strips the private key — the clone holds only the public key.
+#[gen_stub_pyclass]
 #[pyclass(name = "Actor")]
 pub(crate) struct PyActor(pub(crate) Actor<A>);
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyActor {
     /// Create an Actor with a newly-generated keypair.
@@ -25,7 +28,9 @@ impl PyActor {
 
     /// Create an Actor from a 32-byte Ed25519 private key.
     #[staticmethod]
-    fn with_keypair(id: &str, private_key: &[u8]) -> PyResult<Self> {
+    fn with_keypair(id: &str,
+        #[gen_stub(override_type(type_repr = "bytes"))]
+        private_key: &[u8]) -> PyResult<Self> {
         let id = A::from_str(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let bytes: [u8; 32] = private_key
             .try_into()
@@ -38,7 +43,9 @@ impl PyActor {
 
     /// Create an Actor from a 32-byte Ed25519 public key (verify-only, cannot sign).
     #[staticmethod]
-    fn with_public_key(id: &str, public_key: &[u8]) -> PyResult<Self> {
+    fn with_public_key(id: &str, 
+        #[gen_stub(override_type(type_repr = "bytes"))]
+        public_key: &[u8]) -> PyResult<Self> {
         let id = A::from_str(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let bytes: &[u8; 32] = public_key
             .try_into()
@@ -48,10 +55,12 @@ impl PyActor {
         Ok(Self(Actor::with_public_key(id, key)))
     }
 
+    /// Return the actor identifier as a string
     fn id(&self) -> String {
         self.0.id().to_string()
     }
 
+    /// Return true if private key is present
     fn has_private_key(&self) -> bool {
         self.0.has_private_key()
     }

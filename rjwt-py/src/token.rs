@@ -3,16 +3,19 @@ use std::time::Duration;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
-use ::rjwt::{SignedToken, Token};
+use ::rjwt_core::{SignedToken, Token};
 
 use crate::claims::PyClaims;
 use crate::{A, C, H, py_to_claims, system_time_to_unix, unix_to_system_time};
 
 /// An unsigned JWT: issuing host, actor, TTL, and a claims dict[str, int].
+#[gen_stub_pyclass]
 #[pyclass(name = "Token")]
 pub(crate) struct PyToken(pub(crate) Token<H, A, C>);
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PyToken {
     /// Construct a token.
@@ -49,15 +52,18 @@ impl PyToken {
         self.0.actor_id().to_string()
     }
 
+    /// Return true if token is expired
     fn is_expired(&self, now_unix: f64) -> bool {
         self.0.is_expired(unix_to_system_time(now_unix))
     }
 }
 
 /// A signed, encoded JWT together with its decoded chain of Claims.
+#[gen_stub_pyclass]
 #[pyclass(name = "SignedToken")]
 pub(crate) struct PySignedToken(pub(crate) SignedToken<H, A, C>);
 
+#[gen_stub_pymethods]
 #[pymethods]
 impl PySignedToken {
     /// Return the Claims chain for this token.
