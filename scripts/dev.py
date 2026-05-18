@@ -309,6 +309,9 @@ def _run_workflow(steps: list[str]) -> bool:
 # ── Layer 3: CLI ──────────────────────────────────────────────────────────────
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
     all_commands = list(STEPS) + list(WORKFLOWS) + ["serve-docs", "clean"]
 
     parser = argparse.ArgumentParser(
