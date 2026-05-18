@@ -14,6 +14,7 @@ Single-step commands:
     wheel         Build a distribution wheel
     check-wheel   Install wheel in a clean venv and verify it
     serve-docs    Serve built docs via http.server
+    clean         Remove all generated artifacts (venvs, docs, wheels)
 
 Multi-step workflows (support --skip / --only):
     ci            PR check pipeline: stubs, build, check-stubs, example, docs
@@ -147,11 +148,6 @@ def _venv_python(venv: Path) -> str:
     return str(venv / "bin" / "python")
 
 
-def _venv_site_packages(venv: Path) -> Path:
-    if sys.platform == "win32":
-        return venv / "Lib" / "site-packages"
-    return next((venv / "lib").glob("python*/site-packages"))
-
 
 # ── Layer 2: actions ──────────────────────────────────────────────────────────
 
@@ -187,6 +183,9 @@ def build_docs() -> None:
 
 
 def build_wheel() -> None:
+    stub = RJWT_PY_DIR / "rjwt.pyi"
+    if not stub.exists():
+        raise RuntimeError(f"Stubs not found at {stub}. Run 'stubs' first.")
     WHEELS_DIR.mkdir(parents=True, exist_ok=True)
     _uv_run("maturin", "build", "--out", str(WHEELS_DIR),
             *(["--release"] if _state.release else []))
@@ -211,14 +210,20 @@ def check_wheel() -> None:
             check=True,
         )
 
-        # Copy stub so mypy can locate it alongside the installed extension
-        site_pkgs = _venv_site_packages(CHECK_VENV)
-        shutil.copy(RJWT_PY_DIR / "rjwt.pyi", site_pkgs / "rjwt.pyi")
-
         _uv_run("mypy", "--python-executable", python, str(EXAMPLES_DIR / "example.py"))
         subprocess.run([python, str(EXAMPLES_DIR / "example.py")], check=True)
     finally:
         shutil.rmtree(CHECK_VENV, ignore_errors=True)
+
+
+def clean() -> None:
+    for path in (BUILD_VENV, CHECK_VENV, DOCS_OUT, WHEELS_DIR):
+        print(f"Removing {path}")
+        shutil.rmtree(path, ignore_errors=True)
+    for artifact in (RJWT_PY_DIR / "rjwt.pyi", RJWT_PY_DIR / "uv.lock"):
+        if artifact.exists():
+            print(f"Removing {artifact}")
+            artifact.unlink()
 
 
 # ── Step registry and workflow definitions ────────────────────────────────────
@@ -304,7 +309,7 @@ def _run_workflow(steps: list[str]) -> bool:
 # ── Layer 3: CLI ──────────────────────────────────────────────────────────────
 
 def main() -> None:
-    all_commands = list(STEPS) + list(WORKFLOWS) + ["serve-docs"]
+    all_commands = list(STEPS) + list(WORKFLOWS) + ["serve-docs", "clean"]
 
     parser = argparse.ArgumentParser(
         description="Developer script for rjwt-py.",
@@ -348,6 +353,11 @@ def main() -> None:
         help="Build docs before serving (serve-docs only)",
     )
     args = parser.parse_args()
+
+    # ── clean (needs no uv or venv setup) ────────────────────────────────────
+    if args.command == "clean":
+        clean()
+        return
 
     ensure_uv()
     _state.release = args.release
