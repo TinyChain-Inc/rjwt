@@ -1,3 +1,7 @@
 [workspace]
 members = ["rjwt-core", "rjwt-py"]
 resolver = "2"
+
+
+[patch.crates-io]
+rjwt     = { path = "./rjwt-core" }
