@@ -11,6 +11,12 @@ license = { text = "Apache-2.0" }
 
 [tool.maturin]
 module-name = "rjwt"
+include = [{ path = "rjwt.pyi", format = "wheel" }]
+
+[tool.mypy]
+mypy_path = "."
+strict = true
+disallow_any_unimported = true
 
 [dependency-groups]
 build = [

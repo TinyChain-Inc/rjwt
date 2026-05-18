@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import time
 
@@ -5,10 +7,15 @@ import rjwt
 
 
 class ExampleResolver:
-    def __init__(self, host, actors, peers=None):
+    def __init__(
+        self,
+        host: str,
+        actors: dict[str, rjwt.Actor],
+        peers: list[ExampleResolver] | None = None,
+    ) -> None:
         self.host = host
         self.actors = actors
-        self.peers = peers or []
+        self.peers: list[ExampleResolver] = peers or []
 
     async def resolve(self, host: str, actor_id: str) -> rjwt.Actor:
         if host == self.host:
@@ -21,7 +28,7 @@ class ExampleResolver:
         raise RuntimeError(f"Unknown host: {host}")
 
 
-async def main():
+async def main() -> None:
     now = time.time()
 
     bob = rjwt.Actor("bob")
