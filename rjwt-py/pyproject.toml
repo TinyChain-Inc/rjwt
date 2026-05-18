@@ -1,0 +1,30 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "rjwt-py"
+version = "0.1.0"
+description = "Python bindings for rjwt — a recursive JWT library with ECDSA signatures"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+
+[tool.maturin]
+module-name = "rjwt"
+include = [{ path = "rjwt.pyi", format = "wheel" }]
+
+[tool.mypy]
+mypy_path = "."
+strict = true
+disallow_any_unimported = true
+
+[dependency-groups]
+build = [
+    "maturin>=1.7,<2.0",
+    "mypy>=2.1.0"
+]
+docs = [
+    "sphinx>=8.0",
+    "sphinx-autodoc-typehints>=3.0",
+    "sphinx-rtd-theme>=3.0"
+]

@@ -9,5 +9,5 @@ Recursive Javascript Web Token
 .. toctree::
    :maxdepth: 2
 
-   actor
-   token
+   rjwt
+   example
