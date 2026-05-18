@@ -91,7 +91,7 @@ def _write_summary(results: list[tuple[str, bool]]) -> None:
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not path:
         return
-    with open(path, "a") as f:
+    with open(path, "a", encoding="utf-8") as f:
         f.write("## rjwt-py build\n\n")
         f.write("| Step | Result |\n|------|--------|\n")
         for name, ok in results:
@@ -136,6 +136,11 @@ def init_env() -> None:
         str(LOCAL_UV.parent),
         _state.env.get("PATH", ""),
     ])
+    if sys.platform.startswith("darwin"):
+        existing = _state.env.get("RUSTFLAGS", "")
+        _state.env["RUSTFLAGS"] = (
+            existing + " -C link-arg=-undefined -C link-arg=dynamic_lookup"
+        ).strip()
 
 
 def _venv_bin(venv: Path) -> Path:
