@@ -16,10 +16,15 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RJWT_PY_DIR = REPO_ROOT / "rjwt-py"
-EXAMPLE_SCRIPT = Path(__file__).resolve().parent / "example.py"
+EXAMPLES_DIR = REPO_ROOT / "examples"
+TARGET_DIR = REPO_ROOT / "target"
 
 # uv is installed here when not found globally
-LOCAL_UV = REPO_ROOT / "target" / "bin" / "uv"
+LOCAL_UV = TARGET_DIR / "bin" / "uv"
+UV_ENV_VAR_FOR_VENV = "UV_PROJECT_ENVIRONMENT"
+
+BUILD_VENV = TARGET_DIR / "build_venv"
+TEST_VENV = TARGET_DIR / "test_venv"
 
 
 def ensure_uv() -> str:
@@ -37,13 +42,20 @@ def ensure_uv() -> str:
     return str(LOCAL_UV)
 
 
-def create_venv(venv_path: Path, uv: str) -> None:
+def create_custom_venv(venv_path: Path, uv: str) -> None:
     if venv_path.exists():
         print(f"venv exists: {venv_path}")
         return
     venv_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"Creating venv: {venv_path}")
     subprocess.run([uv, "venv", str(venv_path)], check=True)
+
+
+def create_venv(uv: str) -> None:
+    ensure_path(BUILD_VENV)
+    env = os.environ.copy()
+    env[UV_ENV_VAR_FOR_VENV] = str(BUILD_VENV)
+    subprocess.run([uv, "sync", "--group", "build", "--group", "docs"], check=True, env=env, cwd=str(RJWT_PY_DIR))
 
 
 def ensure_maturin(venv_path: Path, uv: str) -> str:
@@ -58,7 +70,7 @@ def ensure_maturin(venv_path: Path, uv: str) -> str:
 
 
 def build_extension(maturin: str, venv_path: Path, release: bool) -> None:
-    cmd = [maturin, "develop", "--uv"]
+    cmd = [maturin, "develop"]
     if release:
         cmd.append("--release")
     print(f"Building extension: {' '.join(cmd)}")
@@ -72,10 +84,12 @@ def build_extension(maturin: str, venv_path: Path, release: bool) -> None:
     subprocess.run(cmd, check=True, cwd=str(RJWT_PY_DIR), env=env)
 
 
-def run_example(venv_path: Path) -> None:
-    python = str(venv_path / "bin" / "python")
-    print(f"Running: {EXAMPLE_SCRIPT}\n")
-    subprocess.run([python, str(EXAMPLE_SCRIPT)], check=True)
+def build_wheel(maturin: str, release: bool) -> None: 
+    cmd = [maturin, "build"]
+    if release:
+        cmd.append("--release")
+    print(f"Building wheel: {' '.join(cmd)}")
+    subprocess.run(cmd, check=True)
 
 
 def clean_venv(venv_path: Path) -> None:
@@ -83,34 +97,11 @@ def clean_venv(venv_path: Path) -> None:
     shutil.rmtree(venv_path, ignore_errors=True)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Build and run the rjwt-py example.")
-    parser.add_argument("--release", action="store_true", help="Use release build profile")
-    args = parser.parse_args()
-
-    profile = "release" if args.release else "debug"
-    venv_path = REPO_ROOT / "target" / profile / "venv"
-
-    success = False
-    try:
-        uv = ensure_uv()
-        create_venv(venv_path, uv)
-        maturin = ensure_maturin(venv_path, uv)
-        build_extension(maturin, venv_path, args.release)
-        run_example(venv_path)
-        success = True
-    except subprocess.CalledProcessError as e:
-        print(f"\nError: {e}", file=sys.stderr)
-    finally:
-        clean_venv(venv_path)
-
-    if success:
-        print("\nStatus: SUCCESS")
-        sys.exit(0)
-    else:
-        print("\nStatus: FAILURE", file=sys.stderr)
-        sys.exit(1)
+def hard_reset_venv(uv: str):
+    clean_venv(BUILD_VENV)
+    create_venv(uv)
 
 
-if __name__ == "__main__":
-    main()
+def ensure_path(path: Path) -> None:
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
