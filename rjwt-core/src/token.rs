@@ -18,7 +18,7 @@ pub(crate) struct TokenHeader {
 impl Default for TokenHeader {
     fn default() -> TokenHeader {
         TokenHeader {
-            alg: "ES256".into(),
+            alg: "EdDSA".into(),
             typ: "JWT".into(),
         }
     }
