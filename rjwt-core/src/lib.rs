@@ -16,7 +16,7 @@
 //! # use std::collections::HashMap;
 //! # use std::time::{Duration, SystemTime};
 //! # use futures::executor::block_on;
-//! use rjwt::*;
+//! use rjwt_core::*;
 //!
 //! #[derive(Clone)]
 //! struct Resolver {

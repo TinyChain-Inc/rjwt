@@ -29,7 +29,7 @@ impl Key {
 /// *IMPORTANT NOTE*: for security reasons, although `Actor` implements `Clone`, its secret key will
 /// NOT be cloned. For example:
 /// ```
-/// # use rjwt::Actor;
+/// # use rjwt_core::Actor;
 /// let actor = Actor::<String>::new("id".to_string()); // this has a new secret key
 /// let cloned = actor.clone(); // this does NOT have a secret key, only a public key
 /// ```
