@@ -31,3 +31,12 @@ falcon-rs = { version = "0.2", optional = true }
 
 [dev-dependencies]
 futures = "0.3"
+
+[[example]]
+name = "ed25519"
+path = "examples/ed25519.rs"
+
+[[example]]
+name = "falcon"
+path = "examples/falcon.rs"
+required-features = ["falcon-rs"]
