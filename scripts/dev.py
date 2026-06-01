@@ -6,6 +6,7 @@ Usage:
     python3 scripts/dev.py <command> [options]
 
 Single-step commands:
+    cargo-matrix  Run cargo test -p rjwt across the feature matrix (-D warnings)
     stubs         Generate type stubs
     build         Build extension module
     check-stubs   Type-check example with mypy
@@ -17,7 +18,7 @@ Single-step commands:
     clean         Remove all generated artifacts (venvs, docs, wheels)
 
 Multi-step workflows (support --skip / --only):
-    ci            PR check pipeline: stubs, build, check-stubs, example, docs
+    ci            PR check pipeline: cargo-matrix, stubs, build, check-stubs, example, docs
     release       Release pipeline:  stubs, build, wheel, check-wheel
     all           Full pipeline:     all steps in order
 
@@ -221,6 +222,39 @@ def check_wheel() -> None:
         shutil.rmtree(CHECK_VENV, ignore_errors=True)
 
 
+def cargo_matrix() -> None:
+    """Run cargo test for rjwt-core across the feature-flag matrix, then build examples.
+
+    Catches cfg-gating regressions: every combination of {default, --no-default-features,
+    --features falcon, --features falcon-rs} must compile and test cleanly under -D warnings.
+    """
+    env = os.environ.copy()
+    rustflags = env.get("RUSTFLAGS", "")
+    env["RUSTFLAGS"] = (rustflags + " -D warnings").strip()
+
+    combos: list[tuple[str, list[str]]] = [
+        ("no-default-features",          ["--no-default-features"]),
+        ("no-default-features +falcon",  ["--no-default-features", "--features", "falcon"]),
+        ("default (falcon-rs)",          []),
+    ]
+    for label, flags in combos:
+        print(f"\n→ cargo test -p rjwt {' '.join(flags)}  [{label}]")
+        subprocess.run(
+            ["cargo", "test", "-p", "rjwt", *flags],
+            check=True,
+            env=env,
+            cwd=str(REPO_ROOT),
+        )
+
+    print("\n→ cargo build -p rjwt --examples")
+    subprocess.run(
+        ["cargo", "build", "-p", "rjwt", "--examples"],
+        check=True,
+        env=env,
+        cwd=str(REPO_ROOT),
+    )
+
+
 def clean() -> None:
     for path in (BUILD_VENV, CHECK_VENV, DOCS_OUT, WHEELS_DIR):
         print(f"Removing {path}")
@@ -234,29 +268,34 @@ def clean() -> None:
 # ── Step registry and workflow definitions ────────────────────────────────────
 
 STEPS: dict[str, str] = {
-    "stubs":       "Generate type stubs",
-    "build":       "Build extension module",
-    "check-stubs": "Type-check example with mypy",
-    "example":     "Run example script",
-    "docs":        "Build Sphinx documentation",
-    "wheel":       "Build distribution wheel",
-    "check-wheel": "Install wheel in clean venv and verify",
+    "cargo-matrix": "Run cargo test -p rjwt across the feature matrix (-D warnings)",
+    "stubs":        "Generate type stubs",
+    "build":        "Build extension module",
+    "check-stubs":  "Type-check example with mypy",
+    "example":      "Run example script",
+    "docs":         "Build Sphinx documentation",
+    "wheel":        "Build distribution wheel",
+    "check-wheel":  "Install wheel in clean venv and verify",
 }
 
 WORKFLOWS: dict[str, list[str]] = {
-    "ci":      ["stubs", "build", "check-stubs", "example", "docs"],
+    "ci":      ["cargo-matrix", "stubs", "build", "check-stubs", "example", "docs"],
     "release": ["stubs", "build", "wheel", "check-wheel"],
-    "all":     ["stubs", "build", "check-stubs", "example", "docs", "wheel", "check-wheel"],
+    "all":     ["cargo-matrix", "stubs", "build", "check-stubs", "example", "docs", "wheel", "check-wheel"],
 }
 
+# Steps that don't need uv, the Python build venv, or anything inside rjwt-py.
+_PURE_RUST_STEPS: set[str] = {"cargo-matrix"}
+
 _STEP_FNS: dict[str, Callable[[], None]] = {
-    "stubs":       build_stubs,
-    "build":       build_module,
-    "check-stubs": check_stubs,
-    "example":     run_example,
-    "docs":        build_docs,
-    "wheel":       build_wheel,
-    "check-wheel": check_wheel,
+    "cargo-matrix": cargo_matrix,
+    "stubs":        build_stubs,
+    "build":        build_module,
+    "check-stubs":  check_stubs,
+    "example":      run_example,
+    "docs":         build_docs,
+    "wheel":        build_wheel,
+    "check-wheel":  check_wheel,
 }
 
 
@@ -367,6 +406,19 @@ def main() -> None:
         clean()
         return
 
+    # ── pure-Rust single step (no uv, no Python venv) ─────────────────────────
+    if args.command in _PURE_RUST_STEPS:
+        _group(args.command)
+        try:
+            _dispatch_step(args.command)
+            print(f"✓ {args.command}")
+        except (subprocess.CalledProcessError, RuntimeError) as e:
+            _error(str(e))
+            sys.exit(1)
+        finally:
+            _endgroup()
+        return
+
     ensure_uv()
     _state.release = args.release
 
@@ -389,30 +441,33 @@ def main() -> None:
         )
         return
 
+    # ── multi-step workflow: resolve steps first so we can decide on venv ────
+    if args.command in WORKFLOWS:
+        steps = _resolve_steps(args.command, args.skip, args.only)
+        if not steps:
+            print("No steps to run after applying --skip / --only.", file=sys.stderr)
+            sys.exit(1)
+
+        if any(s not in _PURE_RUST_STEPS for s in steps):
+            setup_build_venv()
+            init_env()
+
+        ok = _run_workflow(steps)
+        sys.exit(0 if ok else 1)
+
+    # ── single-step command (needs Python venv) ──────────────────────────────
     setup_build_venv()
     init_env()
 
-    # ── single-step command ───────────────────────────────────────────────────
-    if args.command in STEPS:
-        _group(args.command)
-        try:
-            _dispatch_step(args.command)
-            print(f"✓ {args.command}")
-        except (subprocess.CalledProcessError, RuntimeError) as e:
-            _error(str(e))
-            sys.exit(1)
-        finally:
-            _endgroup()
-        return
-
-    # ── multi-step workflow ───────────────────────────────────────────────────
-    steps = _resolve_steps(args.command, args.skip, args.only)
-    if not steps:
-        print("No steps to run after applying --skip / --only.", file=sys.stderr)
+    _group(args.command)
+    try:
+        _dispatch_step(args.command)
+        print(f"✓ {args.command}")
+    except (subprocess.CalledProcessError, RuntimeError) as e:
+        _error(str(e))
         sys.exit(1)
-
-    ok = _run_workflow(steps)
-    sys.exit(0 if ok else 1)
+    finally:
+        _endgroup()
 
 
 if __name__ == "__main__":
