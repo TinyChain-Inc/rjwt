@@ -2,7 +2,6 @@ use std::fmt;
 use std::pin::Pin;
 use std::time::SystemTime;
 
-use ed25519_dalek::Verifier;
 use futures::Future;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -10,7 +9,8 @@ use serde::de::DeserializeOwned;
 use crate::actor::Actor;
 use crate::claims::Claims;
 use crate::error::Error;
-use crate::token::{SignedToken, Token, decode_token, token_signature};
+use crate::sig::AlgKind;
+use crate::token::{SignedToken, Token, decode_header_and_inherit, decode_token, token_signature};
 
 type ResolveResult<A> = Result<Actor<A>, Error>;
 type VerifyResult<H, A, C> = Result<SignedToken<H, A, C>, Error>;
@@ -40,10 +40,31 @@ pub trait Resolve: Send + Sync {
         Self::ActorId: PartialEq,
     {
         async move {
+            validate_uniform_alg(&encoded)?;
             let claims = verify_claims(self, &encoded, now).await?;
             Ok(SignedToken::new(claims, encoded))
         }
     }
+}
+
+/// Walk the inherit chain header-only and return the single [`AlgKind`] shared by every segment.
+///
+/// Returns `Error::Auth` if any two segments have differing alg headers.
+/// Returns `Error::Format` on malformed header/JWT structure.
+///
+/// Does NOT invoke the resolver or verify any signature — purely a header-level scan.
+fn validate_uniform_alg(encoded: &str) -> Result<AlgKind, Error> {
+    let (first_alg, mut maybe_inherit) = decode_header_and_inherit(encoded)?;
+
+    while let Some(inner) = maybe_inherit {
+        let (inner_alg, next_inherit) = decode_header_and_inherit(&inner)?;
+        if inner_alg != first_alg {
+            return Err(Error::auth("mixed-algorithm chains are not supported"));
+        }
+        maybe_inherit = next_inherit;
+    }
+
+    Ok(first_alg)
 }
 
 async fn decode_and_verify_token<R>(
@@ -55,8 +76,8 @@ where
     R: Resolve + ?Sized,
     R::ActorId: PartialEq,
 {
-    let (message, signature) = token_signature(encoded)?;
-    let token: Token<R::HostId, R::ActorId, R::Claims> = decode_token(message)?;
+    let (alg, token): (_, Token<R::HostId, R::ActorId, R::Claims>) = decode_token(encoded)?;
+    let (message, signature) = token_signature(encoded, alg)?;
 
     if token.is_expired(now) {
         return Err(Error::Time("token is expired".to_owned()));
@@ -70,7 +91,7 @@ where
         ));
     }
 
-    if let Err(cause) = actor.public_key().verify(message.as_bytes(), &signature) {
+    if let Err(cause) = actor.verifying_key().verify(message.as_bytes(), &signature) {
         Err(Error::auth(format!("invalid bearer token: {cause}")))
     } else {
         Ok(token)

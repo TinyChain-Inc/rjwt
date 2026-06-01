@@ -2,24 +2,24 @@ use std::fmt;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::prelude::*;
-use ed25519_dalek::Signature;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::claims::Claims;
 use crate::error::Error;
+use crate::sig::{AlgKind, Signature};
 
 #[derive(Eq, PartialEq, Debug, Deserialize, Serialize)]
 pub(crate) struct TokenHeader {
-    alg: String,
+    alg: Option<String>,
     typ: String,
 }
 
-impl Default for TokenHeader {
-    fn default() -> TokenHeader {
-        TokenHeader {
-            alg: "EdDSA".into(),
-            typ: "JWT".into(),
+impl TokenHeader {
+    pub(crate) fn for_alg(alg: AlgKind) -> Self {
+        Self {
+            alg: Some(alg.jwt_name().to_string()),
+            typ: "JWT".to_string(),
         }
     }
 }
@@ -147,7 +147,7 @@ impl<H: fmt::Debug, A: fmt::Debug, C: fmt::Debug> fmt::Debug for SignedToken<H, 
     }
 }
 
-pub(crate) fn token_signature(encoded: &str) -> Result<(&str, Signature), Error> {
+pub(crate) fn token_signature(encoded: &str, alg: AlgKind) -> Result<(&str, Signature), Error> {
     if encoded.ends_with('.') {
         return Err(Error::format("encoded token cannot end with ."));
     }
@@ -158,16 +158,55 @@ pub(crate) fn token_signature(encoded: &str) -> Result<(&str, Signature), Error>
 
     let message = &encoded[..i];
 
-    let signature = BASE64_STANDARD
+    let signature_bytes = BASE64_STANDARD
         .decode(&encoded[(i + 1)..])
         .map_err(|e| Error::Base64(e.to_string()))?;
 
-    let signature = Signature::try_from(&signature[..])?;
+    let signature = Signature::from_bytes(alg, &signature_bytes)?;
 
     Ok((message, signature))
 }
 
-pub(crate) fn decode_token<H, A, C>(encoded: &str) -> Result<Token<H, A, C>, Error>
+/// Decode only the JWT header and extract the `inherit` field from the body as a raw JSON value,
+/// without binding generic payload types. Used by the alg-uniformity pre-pass.
+pub(crate) fn decode_header_and_inherit(encoded: &str) -> Result<(AlgKind, Option<String>), Error> {
+    let i = encoded
+        .find('.')
+        .ok_or_else(|| Error::format(format!("invalid token: {}", encoded)))?;
+
+    let header_bytes = BASE64_STANDARD.decode(&encoded[..i])?;
+    let header: TokenHeader =
+        serde_json::from_slice(&header_bytes).map_err(|e| Error::Format(e.to_string()))?;
+
+    if header.typ != "JWT" {
+        return Err(Error::format(format!(
+            "unsupported token type: {}",
+            header.typ
+        )));
+    }
+
+    let alg_str = header
+        .alg
+        .ok_or_else(|| Error::format("missing alg field in token header"))?;
+    let alg = AlgKind::from_jwt_name(&alg_str)?;
+
+    let body_part = &encoded[(i + 1)..];
+    let dot = body_part
+        .find('.')
+        .ok_or_else(|| Error::format(format!("invalid token: {}", encoded)))?;
+
+    let body_bytes = BASE64_STANDARD.decode(&body_part[..dot])?;
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+
+    let inherit = body
+        .get("inherit")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_owned());
+
+    Ok((alg, inherit))
+}
+
+pub(crate) fn decode_token<H, A, C>(encoded: &str) -> Result<(AlgKind, Token<H, A, C>), Error>
 where
     H: DeserializeOwned,
     A: DeserializeOwned,
@@ -177,17 +216,29 @@ where
         .find('.')
         .ok_or_else(|| Error::format(format!("invalid token: {}", encoded)))?;
 
-    let header = BASE64_STANDARD.decode(&encoded[..i])?;
-    let header: TokenHeader = serde_json::from_slice(&header)?;
+    let header_bytes = BASE64_STANDARD.decode(&encoded[..i])?;
+    let header: TokenHeader =
+        serde_json::from_slice(&header_bytes).map_err(|e| Error::Format(e.to_string()))?;
 
-    if header != TokenHeader::default() {
+    if header.typ != "JWT" {
         return Err(Error::format(format!(
-            "unsupported bearer token type: {header:?}"
+            "unsupported token type: {}",
+            header.typ
         )));
     }
 
-    let token = BASE64_STANDARD.decode(&encoded[(i + 1)..])?;
-    let token = serde_json::from_slice(&token)?;
+    let alg_str = header
+        .alg
+        .ok_or_else(|| Error::format("missing alg field in token header"))?;
+    let alg = AlgKind::from_jwt_name(&alg_str)?;
 
-    Ok(token)
+    let body_part = &encoded[(i + 1)..];
+    let dot = body_part
+        .find('.')
+        .ok_or_else(|| Error::format(format!("invalid token: {}", encoded)))?;
+
+    let token_bytes = BASE64_STANDARD.decode(&body_part[..dot])?;
+    let token = serde_json::from_slice(&token_bytes)?;
+
+    Ok((alg, token))
 }

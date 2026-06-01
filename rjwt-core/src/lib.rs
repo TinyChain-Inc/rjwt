@@ -136,41 +136,25 @@ mod actor;
 mod claims;
 mod error;
 mod resolve;
+mod sig;
 mod token;
 
 pub use actor::Actor;
 pub use claims::{Claims, Iter};
-pub use ed25519_dalek::{Signature, SigningKey, VerifyingKey};
 pub use error::Error;
 pub use rand::rngs::OsRng;
 pub use resolve::Resolve;
+pub use sig::{AlgKind, Signature, SigningKey, VerifyingKey};
 pub use token::{SignedToken, Token};
 
+#[cfg(feature = "falcon")]
+pub use sig::falcon::{
+    Falcon512Backend, Falcon512KeyPair, Falcon512PrivateKey, Falcon512PublicKey,
+    Falcon512Signature, RJWT_FALCON_CONTEXT,
+};
+
+#[cfg(feature = "falcon-rs")]
+pub use sig::falcon::FalconRsBackend;
+
 #[cfg(test)]
-mod tests {
-    use std::time::{Duration, SystemTime};
-
-    use crate::token::token_signature;
-
-    use super::*;
-
-    const SIZE_LIMIT: usize = 8000; // max HTTP header size
-
-    #[test]
-    fn test_format() {
-        let actor = Actor::new("actor".to_string());
-        let token = Token::new(
-            "example.com".to_string(),
-            SystemTime::now(),
-            Duration::from_secs(30),
-            actor.id().to_string(),
-            (),
-        );
-
-        let signed = actor.sign_token(token).unwrap();
-        let (message, _) = token_signature(signed.jwt()).unwrap();
-
-        assert!(signed.jwt().starts_with(message));
-        assert!(signed.jwt().len() < SIZE_LIMIT);
-    }
-}
+mod unittests;
