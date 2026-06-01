@@ -1,6 +1,12 @@
 
-use crate::*;
+#[cfg(feature = "falcon-rs")]
+use std::sync::Arc;
+#[cfg(feature = "falcon-rs")]
+use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(feature = "falcon-rs")]
 use std::time::{Duration, SystemTime};
+
+use crate::*;
 
 #[cfg(feature = "falcon")]
 #[test]
@@ -50,11 +56,13 @@ fn test_alg_kind_jwt_name_roundtrip() {
     }
 }
 
+#[cfg(feature = "falcon-rs")]
 struct TestResolver {
     hostname: String,
     actors: std::collections::HashMap<(String, String), Actor<String>>,
 }
 
+#[cfg(feature = "falcon-rs")]
 impl TestResolver {
     fn new(hostname: impl Into<String>) -> Self {
         Self {
@@ -69,6 +77,7 @@ impl TestResolver {
     }
 }
 
+#[cfg(feature = "falcon-rs")]
 impl Resolve for TestResolver {
     type HostId = String;
     type ActorId = String;
@@ -890,5 +899,114 @@ fn test_alg_header_matches_actor_key_mismatch() {
         matches!(result, Err(Error::Auth(_))),
         "expected Err(Error::Auth), got {:?}",
         result
+    );
+}
+
+#[cfg(feature = "falcon-rs")]
+#[derive(Clone, Debug, Default)]
+struct RecordingBackend {
+    sign_calls: Arc<AtomicUsize>,
+    verify_calls: Arc<AtomicUsize>,
+}
+
+#[cfg(feature = "falcon-rs")]
+impl RecordingBackend {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn sign_count(&self) -> usize {
+        self.sign_calls.load(Ordering::SeqCst)
+    }
+
+    fn verify_count(&self) -> usize {
+        self.verify_calls.load(Ordering::SeqCst)
+    }
+}
+
+#[cfg(feature = "falcon-rs")]
+impl Falcon512Backend for RecordingBackend {
+    fn generate(&self) -> Result<Falcon512KeyPair, Error> {
+        FalconRsBackend.generate()
+    }
+
+    fn sign(
+        &self,
+        sk: &Falcon512PrivateKey,
+        msg: &[u8],
+    ) -> Result<Falcon512Signature, Error> {
+        self.sign_calls.fetch_add(1, Ordering::SeqCst);
+        FalconRsBackend.sign(sk, msg)
+    }
+
+    fn verify(
+        &self,
+        pk: &Falcon512PublicKey,
+        msg: &[u8],
+        sig: &Falcon512Signature,
+    ) -> Result<(), Error> {
+        self.verify_calls.fetch_add(1, Ordering::SeqCst);
+        FalconRsBackend.verify(pk, msg, sig)
+    }
+}
+
+#[cfg(feature = "falcon-rs")]
+#[test]
+fn test_falcon_custom_backend_sign_routed() {
+    let recording = RecordingBackend::new();
+    let actor =
+        Actor::<String>::new_falcon512_with("alice".to_string(), Arc::new(recording.clone()))
+            .expect("actor creation");
+    let now = SystemTime::now();
+    let token = Token::new(
+        "example.com".to_string(),
+        now,
+        Duration::from_secs(30),
+        actor.id().to_string(),
+        (),
+    );
+    actor.sign_token(token).expect("sign_token");
+    assert_eq!(recording.sign_count(), 1, "expected exactly one sign call");
+}
+
+#[cfg(feature = "falcon-rs")]
+#[test]
+fn test_falcon_custom_backend_verify_routed() {
+    use futures::executor::block_on;
+
+    let host = "example.com".to_string();
+    let now = SystemTime::now();
+
+    let signer = Actor::<String>::new_falcon512_with("alice".to_string(), Arc::new(FalconRsBackend))
+        .expect("signer creation");
+    let token = Token::new(
+        host.clone(),
+        now,
+        Duration::from_secs(30),
+        signer.id().to_string(),
+        (),
+    );
+    let signed = signer.sign_token(token).expect("sign_token");
+
+    let public_key = match signer.verifying_key() {
+        VerifyingKey::Falcon512 { public_key, .. } => public_key,
+        _ => panic!("expected Falcon512 verifying key"),
+    };
+
+    let recording = RecordingBackend::new();
+    let verify_actor = Actor::<String>::with_verifying_key(
+        "alice".to_string(),
+        VerifyingKey::falcon512_with(public_key, Arc::new(recording.clone())),
+    );
+
+    let mut resolver = TestResolver::new(host.clone());
+    resolver.add(verify_actor);
+
+    let result = block_on(resolver.verify(signed.jwt().to_string(), now));
+    assert!(result.is_ok(), "verify should succeed, got {:?}", result);
+    assert_eq!(
+        recording.verify_count(),
+        1,
+        "expected exactly one verify call"
     );
 }
