@@ -1,14 +1,20 @@
 use std::fmt;
 use std::time::SystemTime;
-use std::sync::Arc;
 
 use base64::prelude::*;
 use serde::Serialize;
 
 use crate::claims::Claims;
 use crate::error::Error;
-use crate::sig::{SigningKey, VerifyingKey, falcon::Falcon512Backend, falcon::FalconRsBackend};
+use crate::sig::{SigningKey, VerifyingKey};
 use crate::token::{SignedToken, Token, TokenHeader};
+
+#[cfg(feature = "falcon")]
+use std::sync::Arc;
+use crate::sig::falcon::Falcon512Backend;
+
+#[cfg(feature = "falcon-rs")]
+use crate::sig::falcon::FalconRsBackend;
 
 enum Key {
     Public(VerifyingKey),
@@ -51,7 +57,7 @@ impl<A> Actor<A> {
     #[cfg(feature = "falcon")]
     pub fn new_falcon512_with(
         id: A,
-        backend: std::sync::Arc<dyn Falcon512Backend>,
+        backend: Arc<dyn Falcon512Backend>,
     ) -> Result<Self, Error> {
         let keypair = backend.generate()?;
         Ok(Self {
