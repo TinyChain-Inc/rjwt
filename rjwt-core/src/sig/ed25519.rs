@@ -1,4 +1,4 @@
-use ed25519_dalek::{Signer, Verifier};
+use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH, Signer, Verifier};
 use rand::rngs::OsRng;
 
 use crate::error::Error;
@@ -9,6 +9,8 @@ pub struct Ed25519VerifyingKey(ed25519_dalek::VerifyingKey);
 
 pub struct Ed25519Signature(ed25519_dalek::Signature);
 
+const ALGORITHM_NAME: &str = "Ed25519";
+
 impl Ed25519SigningKey {
     pub fn generate() -> Self {
         Self(ed25519_dalek::SigningKey::generate(&mut OsRng))
@@ -18,6 +20,18 @@ impl Ed25519SigningKey {
         Ed25519VerifyingKey(self.0.verifying_key())
     }
 
+    pub fn from_bytes(secret: &[u8]) -> Result<Self, Error> {
+        let secret: [u8; SECRET_KEY_LENGTH] = secret.try_into().map_err(|_| {
+            Error::format(format!(
+                "{} signing key must be {} bytes, got {}",
+                ALGORITHM_NAME,
+                SECRET_KEY_LENGTH,
+                secret.len()
+            ))
+        })?;
+        Ok(Self(ed25519_dalek::SigningKey::from_bytes(&secret)))
+    }
+
     pub fn sign(&self, msg: &[u8]) -> Result<Ed25519Signature, Error> {
         Ok(Ed25519Signature(self.0.try_sign(msg)?))
     }
@@ -25,16 +39,18 @@ impl Ed25519SigningKey {
 
 impl Ed25519VerifyingKey {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-        let arr: [u8; 32] = bytes.try_into().map_err(|_| {
+        let arr: [u8; PUBLIC_KEY_LENGTH] = bytes.try_into().map_err(|_| {
             Error::format(format!(
-                "Ed25519 verifying key must be 32 bytes, got {}",
+                "{} verifying key must be {} bytes, got {}",
+                ALGORITHM_NAME,
+                PUBLIC_KEY_LENGTH,
                 bytes.len()
             ))
         })?;
         Ok(Self(ed25519_dalek::VerifyingKey::from_bytes(&arr)?))
     }
 
-    pub fn to_bytes(&self) -> [u8; 32] {
+    pub fn to_bytes(&self) -> [u8; PUBLIC_KEY_LENGTH] {
         self.0.to_bytes()
     }
 

@@ -98,6 +98,18 @@ impl SigningKey {
             }
         }
     }
+
+    pub fn from_bytes(alg: AlgKind, bytes: &[u8]) -> Result<Self, Error> {
+        match alg {
+            AlgKind::Ed25519 => Ok(Self::Ed25519(ed25519::Ed25519SigningKey::from_bytes(
+                bytes,
+            )?)),
+            #[cfg(feature = "falcon")]
+            AlgKind::Falcon512 => Err(Error::auth(
+                "Falcon-512 signing keys require a backend; use SigningKey::falcon512_with",
+            )),
+        }
+    }
 }
 
 impl VerifyingKey {

@@ -10,8 +10,9 @@ use crate::sig::{SigningKey, VerifyingKey};
 use crate::token::{SignedToken, Token, TokenHeader};
 
 #[cfg(feature = "falcon")]
-use std::sync::Arc;
 use crate::sig::falcon::Falcon512Backend;
+#[cfg(feature = "falcon")]
+use std::sync::Arc;
 
 #[cfg(feature = "falcon-rs")]
 use crate::sig::falcon::FalconRsBackend;
@@ -55,10 +56,7 @@ impl<A> Actor<A> {
 
     /// Return an `Actor` with a newly-generated Falcon-512 keypair using the given backend.
     #[cfg(feature = "falcon")]
-    pub fn new_falcon512_with(
-        id: A,
-        backend: Arc<dyn Falcon512Backend>,
-    ) -> Result<Self, Error> {
+    pub fn new_falcon512_with(id: A, backend: Arc<dyn Falcon512Backend>) -> Result<Self, Error> {
         let keypair = backend.generate()?;
         Ok(Self {
             id,

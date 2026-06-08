@@ -4,7 +4,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
-use ::rjwt_core::Claims;
+use rjwt_core::Claims;
 
 use crate::{A, C, H, claims_to_py};
 
