@@ -61,21 +61,18 @@ fn main() {
     let bobs_id = "bob".to_string();
     let example_dot_com = "example.com".to_string();
 
-    let actor_bob =
-        Actor::new_falcon512(bobs_id.clone()).expect("falcon-rs available");
+    let actor_bob = Actor::new_falcon512(bobs_id.clone()).expect("falcon-rs available");
     let example = Resolver::new(example_dot_com.clone(), [actor_bob.clone()], vec![]);
 
     let retailer_dot_com = "retailer.com".to_string();
-    let retail_app =
-        Actor::new_falcon512("app".to_string()).expect("falcon-rs available");
+    let retail_app = Actor::new_falcon512("app".to_string()).expect("falcon-rs available");
     let retailer = Resolver::new(
         retailer_dot_com.clone(),
         [retail_app.clone()],
         vec![example.clone()],
     );
 
-    let bank_account =
-        Actor::new_falcon512("bank".to_string()).expect("falcon-rs available");
+    let bank_account = Actor::new_falcon512("bank".to_string()).expect("falcon-rs available");
     let bank = Resolver::new(
         "bank.com".to_string(),
         [bank_account.clone()],
@@ -97,15 +94,22 @@ fn main() {
     let bobs_token: SignedToken<String, String, String> =
         block_on(retailer.verify(bobs_token.into_jwt(), now)).expect("claims");
 
-    assert!(bobs_token
-        .claims()
-        .get(&example_dot_com, &bobs_id)
-        .expect("claim")
-        .starts_with("I am Bob"));
+    assert!(
+        bobs_token
+            .claims()
+            .get(&example_dot_com, &bobs_id)
+            .expect("claim")
+            .starts_with("I am Bob")
+    );
 
     let retailer_claim = String::from("Bob spent $1 on retailer.com");
     let retailer_token = retail_app
-        .consume_and_sign(bobs_token, retailer_dot_com.clone(), retailer_claim.clone(), now)
+        .consume_and_sign(
+            bobs_token,
+            retailer_dot_com.clone(),
+            retailer_claim.clone(),
+            now,
+        )
         .expect("signed token");
 
     assert_eq!(
@@ -127,17 +131,21 @@ fn main() {
 
     assert_eq!(retailer_token, retailer_token_as_received);
 
-    assert!(retailer_token_as_received
-        .claims()
-        .get(&example_dot_com, &bobs_id)
-        .expect("claim")
-        .starts_with("I am Bob and retailer.com may debit my bank.com account"));
+    assert!(
+        retailer_token_as_received
+            .claims()
+            .get(&example_dot_com, &bobs_id)
+            .expect("claim")
+            .starts_with("I am Bob and retailer.com may debit my bank.com account")
+    );
 
-    assert!(retailer_token_as_received
-        .claims()
-        .get(&retailer_dot_com, retail_app.id())
-        .expect("claim")
-        .starts_with("Bob spent $1"));
+    assert!(
+        retailer_token_as_received
+            .claims()
+            .get(&retailer_dot_com, retail_app.id())
+            .expect("claim")
+            .starts_with("Bob spent $1")
+    );
 
     println!("OK: Falcon-512 chain verified — Bob → retailer.com → bank.com");
 }

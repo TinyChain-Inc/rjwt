@@ -1,4 +1,3 @@
-
 #[cfg(feature = "falcon-rs")]
 use std::sync::Arc;
 #[cfg(feature = "falcon-rs")]
@@ -930,11 +929,7 @@ impl Falcon512Backend for RecordingBackend {
         FalconRsBackend.generate()
     }
 
-    fn sign(
-        &self,
-        sk: &Falcon512PrivateKey,
-        msg: &[u8],
-    ) -> Result<Falcon512Signature, Error> {
+    fn sign(&self, sk: &Falcon512PrivateKey, msg: &[u8]) -> Result<Falcon512Signature, Error> {
         self.sign_calls.fetch_add(1, Ordering::SeqCst);
         FalconRsBackend.sign(sk, msg)
     }
@@ -977,8 +972,9 @@ fn test_falcon_custom_backend_verify_routed() {
     let host = "example.com".to_string();
     let now = SystemTime::now();
 
-    let signer = Actor::<String>::new_falcon512_with("alice".to_string(), Arc::new(FalconRsBackend))
-        .expect("signer creation");
+    let signer =
+        Actor::<String>::new_falcon512_with("alice".to_string(), Arc::new(FalconRsBackend))
+            .expect("signer creation");
     let token = Token::new(
         host.clone(),
         now,

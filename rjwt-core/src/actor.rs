@@ -1,12 +1,13 @@
 use std::fmt;
 use std::time::SystemTime;
+use std::sync::Arc;
 
 use base64::prelude::*;
 use serde::Serialize;
 
 use crate::claims::Claims;
 use crate::error::Error;
-use crate::sig::{SigningKey, VerifyingKey};
+use crate::sig::{SigningKey, VerifyingKey, falcon::Falcon512Backend, falcon::FalconRsBackend};
 use crate::token::{SignedToken, Token, TokenHeader};
 
 enum Key {
@@ -50,7 +51,7 @@ impl<A> Actor<A> {
     #[cfg(feature = "falcon")]
     pub fn new_falcon512_with(
         id: A,
-        backend: std::sync::Arc<dyn crate::sig::falcon::Falcon512Backend>,
+        backend: std::sync::Arc<dyn Falcon512Backend>,
     ) -> Result<Self, Error> {
         let keypair = backend.generate()?;
         Ok(Self {
@@ -62,7 +63,7 @@ impl<A> Actor<A> {
     /// Return an `Actor` with a newly-generated Falcon-512 keypair using the default `falcon-rs` backend.
     #[cfg(feature = "falcon-rs")]
     pub fn new_falcon512(id: A) -> Result<Self, Error> {
-        Self::new_falcon512_with(id, std::sync::Arc::new(crate::sig::falcon::FalconRsBackend))
+        Self::new_falcon512_with(id, Arc::new(FalconRsBackend))
     }
 
     /// Return an `Actor` with the given signing key.
