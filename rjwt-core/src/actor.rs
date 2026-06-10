@@ -9,14 +9,6 @@ use crate::error::Error;
 use crate::sig::{SigningKey, VerifyingKey};
 use crate::token::{SignedToken, Token, TokenHeader};
 
-#[cfg(feature = "falcon")]
-use crate::sig::falcon::Falcon512Backend;
-#[cfg(feature = "falcon")]
-use std::sync::Arc;
-
-#[cfg(feature = "falcon-rs")]
-use crate::sig::falcon::FalconRsBackend;
-
 enum Key {
     Public(VerifyingKey),
     Private(SigningKey),
@@ -54,20 +46,14 @@ impl<A> Actor<A> {
         }
     }
 
-    /// Return an `Actor` with a newly-generated Falcon-512 keypair using the given backend.
+    /// Return an `Actor` with a newly-generated Falcon-512 keypair.
     #[cfg(feature = "falcon")]
-    pub fn new_falcon512_with(id: A, backend: Arc<dyn Falcon512Backend>) -> Result<Self, Error> {
-        let keypair = backend.generate()?;
+    pub fn new_falcon512(id: A) -> Result<Self, Error> {
+        let signing_key = SigningKey::generate_falcon512()?;
         Ok(Self {
             id,
-            key: Key::Private(SigningKey::falcon512_with(keypair, backend)),
+            key: Key::Private(signing_key)
         })
-    }
-
-    /// Return an `Actor` with a newly-generated Falcon-512 keypair using the default `falcon-rs` backend.
-    #[cfg(feature = "falcon-rs")]
-    pub fn new_falcon512(id: A) -> Result<Self, Error> {
-        Self::new_falcon512_with(id, Arc::new(FalconRsBackend))
     }
 
     /// Return an `Actor` with the given signing key.

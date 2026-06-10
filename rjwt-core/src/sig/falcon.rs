@@ -4,37 +4,34 @@ use zeroize::Zeroizing;
 
 use crate::error::Error;
 
-pub const PUBLIC_KEY_LEN: usize = 897;
-pub const PRIVATE_KEY_LEN: usize = 1281;
-pub const SIGNATURE_LEN: usize = 666; // FALCON_SIG_PADDED size for FN-DSA-512 (logn=9); see ADR-002.
-
-/// Hardcoded domain-separation context for rjwt Falcon-512 signatures.
-/// Locked as part of the wire-format contract — see ADR-001.
-pub const RJWT_FALCON_CONTEXT: &[u8] = b"rjwt-v1";
+const PUBLIC_KEY_LEN: usize = 897;
+const PRIVATE_KEY_LEN: usize = 1281;
+const SIGNATURE_LEN: usize = 666; // FALCON_SIG_PADDED size for FN-DSA-512 (logn=9); see ADR-002.
 
 #[derive(Clone)]
-pub struct Falcon512PublicKey(Box<[u8; PUBLIC_KEY_LEN]>);
+pub(crate) struct Falcon512PublicKey(Box<[u8; PUBLIC_KEY_LEN]>);
 
-pub struct Falcon512PrivateKey(Box<Zeroizing<[u8; PRIVATE_KEY_LEN]>>);
+pub(crate) struct Falcon512PrivateKey(Box<Zeroizing<[u8; PRIVATE_KEY_LEN]>>);
 
 #[derive(Clone)]
-pub struct Falcon512Signature(Box<[u8; SIGNATURE_LEN]>);
+pub(crate) struct Falcon512Signature(Box<[u8; SIGNATURE_LEN]>);
 
-pub struct Falcon512KeyPair {
+pub(crate) struct Falcon512KeyPair {
     pub public: Falcon512PublicKey,
     pub private: Falcon512PrivateKey,
 }
 
 /// Backend trait — swap implementations of FN-DSA-512 without touching rjwt-core.
-pub trait Falcon512Backend: Send + Sync + fmt::Debug {
-    fn generate(&self) -> Result<Falcon512KeyPair, Error>;
-    fn sign(&self, sk: &Falcon512PrivateKey, msg: &[u8]) -> Result<Falcon512Signature, Error>;
+pub(crate) trait Falcon512Backend: Send + Sync + fmt::Debug {
+    const FALCON_CONTEXT: &[u8];
+    fn generate() -> Result<Falcon512KeyPair, Error>;
+    fn sign(sk: &Falcon512PrivateKey, msg: &[u8]) -> Result<Falcon512Signature, Error>;
     fn verify(
-        &self,
         pk: &Falcon512PublicKey,
         msg: &[u8],
         sig: &Falcon512Signature,
     ) -> Result<(), Error>;
+    fn from_bytes(secret: &[u8]) -> Result<Falcon512KeyPair, Error>;
 }
 
 impl Falcon512PublicKey {
@@ -92,8 +89,9 @@ impl Falcon512Signature {
     }
 }
 
-#[cfg(feature = "falcon-rs")]
+
 mod default_backend {
+    use falcon::FnDsaKeyPair;
     use falcon::falcon::{
         FALCON_SIG_PADDED, falcon_sign_dyn_finish, falcon_sign_start, falcon_tmpsize_signdyn,
         falcon_tmpsize_verify, falcon_verify_finish, falcon_verify_start, shake256_inject,
@@ -103,9 +101,11 @@ mod default_backend {
 
     use super::{
         Falcon512Backend, Falcon512KeyPair, Falcon512PrivateKey, Falcon512PublicKey,
-        Falcon512Signature, RJWT_FALCON_CONTEXT, SIGNATURE_LEN,
+        Falcon512Signature, SIGNATURE_LEN,
     };
+    use crate::sig::AlgKind;
     use crate::error::Error;
+    use super::PRIVATE_KEY_LEN;
 
     const LOGN: u32 = 9;
 
@@ -125,19 +125,23 @@ mod default_backend {
         Ok(rng)
     }
 
-    fn inject_domain_and_message(hd: &mut InnerShake256Context, msg: &[u8]) {
+    fn inject_domain_and_message(hd: &mut InnerShake256Context, msg: &[u8], context: &[u8]) {
         // FIPS 206 pure-FN-DSA domain prefix for DomainSeparation::Context:
         //   ph_flag (0x00) || ctx_len || ctx_bytes || raw_message
         // Mirrors safe_api::DomainSeparation::inject_header + inject_message.
         let ph_flag: u8 = 0x00;
-        let ctx_len: u8 = RJWT_FALCON_CONTEXT.len() as u8;
+        let ctx_len: u8 = context.len() as u8;
         shake256_inject(hd, &[ph_flag, ctx_len]);
-        shake256_inject(hd, RJWT_FALCON_CONTEXT);
+        shake256_inject(hd, context);
         shake256_inject(hd, msg);
     }
 
     impl Falcon512Backend for FalconRsBackend {
-        fn generate(&self) -> Result<Falcon512KeyPair, Error> {
+        /// Hardcoded domain-separation context for rjwt Falcon-512 signatures.
+        /// Locked as part of the wire-format contract — see ADR-001.
+        const FALCON_CONTEXT: &[u8] = b"rjwt-v1";
+
+        fn generate() -> Result<Falcon512KeyPair, Error> {
             use falcon::prelude::*;
             let kp = FnDsaKeyPair::generate(LOGN)
                 .map_err(|e| Error::auth(format!("falcon-rs: {e:?}")))?;
@@ -146,7 +150,7 @@ mod default_backend {
             Ok(Falcon512KeyPair { public, private })
         }
 
-        fn sign(&self, sk: &Falcon512PrivateKey, msg: &[u8]) -> Result<Falcon512Signature, Error> {
+        fn sign(sk: &Falcon512PrivateKey, msg: &[u8]) -> Result<Falcon512Signature, Error> {
             let mut rng = init_rng()?;
             let tmp_len = falcon_tmpsize_signdyn(LOGN);
             let mut tmp = Zeroizing::new(vec![0u8; tmp_len]);
@@ -159,7 +163,7 @@ mod default_backend {
             if rc != 0 {
                 return Err(map_err(rc));
             }
-            inject_domain_and_message(&mut hd, msg);
+            inject_domain_and_message(&mut hd, msg, Self::FALCON_CONTEXT);
 
             let rc = falcon_sign_dyn_finish(
                 &mut rng,
@@ -178,11 +182,11 @@ mod default_backend {
                 sig_len, SIGNATURE_LEN,
                 "PADDED format must be exactly {SIGNATURE_LEN} bytes"
             );
+
             Falcon512Signature::from_bytes(&sig)
         }
 
         fn verify(
-            &self,
             pk: &Falcon512PublicKey,
             msg: &[u8],
             sig: &Falcon512Signature,
@@ -196,7 +200,7 @@ mod default_backend {
             if rc != 0 {
                 return Err(map_err(rc));
             }
-            inject_domain_and_message(&mut hd, msg);
+            inject_domain_and_message(&mut hd, msg, Self::FALCON_CONTEXT);
 
             let rc = falcon_verify_finish(
                 sig_bytes,
@@ -210,8 +214,27 @@ mod default_backend {
             }
             Ok(())
         }
+        
+        fn from_bytes(pk: &[u8]) -> Result<Falcon512KeyPair, Error> {
+            let pk: &[u8; PRIVATE_KEY_LEN] = pk.try_into().map_err(|_| {
+                Error::format(format!(
+                    "{} private key is {} bytes, got {}",
+                    AlgKind::Falcon512.jwt_name(),
+                    PRIVATE_KEY_LEN,
+                    pk.len()
+                ))
+            })?;
+            let kp = FnDsaKeyPair::from_private_key(pk)
+                .map_err(|e| Error::format(format!("falcon-rs: {e:?}")))?;
+
+            Ok(
+                Falcon512KeyPair { 
+                    public: Falcon512PublicKey::from_bytes(kp.public_key())?,
+                    private: Falcon512PrivateKey::from_bytes(kp.private_key())? 
+                }
+            )
+        }
     }
 }
 
-#[cfg(feature = "falcon-rs")]
-pub use default_backend::FalconRsBackend;
+pub type FalconBackend = default_backend::FalconRsBackend;

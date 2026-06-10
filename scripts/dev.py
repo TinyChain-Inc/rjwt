@@ -226,7 +226,7 @@ def cargo_matrix() -> None:
     """Run cargo test for rjwt-core across the feature-flag matrix, then build examples.
 
     Catches cfg-gating regressions: every combination of {default, --no-default-features,
-    --features falcon, --features falcon-rs} must compile and test cleanly under -D warnings.
+    --features falcon} must compile and test cleanly under -D warnings.
     """
     env = os.environ.copy()
     rustflags = env.get("RUSTFLAGS", "")
@@ -234,8 +234,8 @@ def cargo_matrix() -> None:
 
     combos: list[tuple[str, list[str]]] = [
         ("no-default-features",          ["--no-default-features"]),
-        ("no-default-features +falcon",  ["--no-default-features", "--features", "falcon"]),
-        ("default (falcon-rs)",          []),
+        ("no-default-features + falcon",  ["--no-default-features", "--features", "falcon"]),
+        ("default (falcon)",          []),
     ]
     for label, flags in combos:
         print(f"\n→ cargo test -p rjwt {' '.join(flags)}  [{label}]")

@@ -1,7 +1,8 @@
-use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH, Signer, Verifier};
+use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH, SIGNATURE_LENGTH, Signer, Verifier};
 use rand::rngs::OsRng;
 
 use crate::error::Error;
+use super::AlgKind;
 
 pub struct Ed25519SigningKey(ed25519_dalek::SigningKey);
 
@@ -21,15 +22,15 @@ impl Ed25519SigningKey {
     }
 
     pub fn from_bytes(secret: &[u8]) -> Result<Self, Error> {
-        let secret: [u8; SECRET_KEY_LENGTH] = secret.try_into().map_err(|_| {
+        let secret: &[u8; SECRET_KEY_LENGTH] = secret.try_into().map_err(|_| {
             Error::format(format!(
                 "{} signing key must be {} bytes, got {}",
-                ALGORITHM_NAME,
+                AlgKind::Ed25519.jwt_name(),
                 SECRET_KEY_LENGTH,
                 secret.len()
             ))
         })?;
-        Ok(Self(ed25519_dalek::SigningKey::from_bytes(&secret)))
+        Ok(Self(ed25519_dalek::SigningKey::from_bytes(secret)))
     }
 
     pub fn sign(&self, msg: &[u8]) -> Result<Ed25519Signature, Error> {
@@ -39,15 +40,15 @@ impl Ed25519SigningKey {
 
 impl Ed25519VerifyingKey {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-        let arr: [u8; PUBLIC_KEY_LENGTH] = bytes.try_into().map_err(|_| {
+        let arr: &[u8; PUBLIC_KEY_LENGTH] = bytes.try_into().map_err(|_| {
             Error::format(format!(
                 "{} verifying key must be {} bytes, got {}",
-                ALGORITHM_NAME,
+                AlgKind::Ed25519.jwt_name(),
                 PUBLIC_KEY_LENGTH,
                 bytes.len()
             ))
         })?;
-        Ok(Self(ed25519_dalek::VerifyingKey::from_bytes(&arr)?))
+        Ok(Self(ed25519_dalek::VerifyingKey::from_bytes(arr)?))
     }
 
     pub fn to_bytes(&self) -> [u8; PUBLIC_KEY_LENGTH] {
@@ -67,16 +68,18 @@ impl Clone for Ed25519VerifyingKey {
 
 impl Ed25519Signature {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-        let arr: [u8; 64] = bytes.try_into().map_err(|_| {
+        let arr: &[u8; SIGNATURE_LENGTH] = bytes.try_into().map_err(|_| {
             Error::format(format!(
-                "Ed25519 signature must be 64 bytes, got {}",
+                "{} signature must be {} bytes, got {}",
+                AlgKind::Ed25519.jwt_name(),
+                SIGNATURE_LENGTH,
                 bytes.len()
             ))
         })?;
-        Ok(Self(ed25519_dalek::Signature::from_bytes(&arr)))
+        Ok(Self(ed25519_dalek::Signature::from_bytes(arr)))
     }
 
-    pub fn to_bytes(&self) -> [u8; 64] {
+    pub fn to_bytes(&self) -> [u8; SIGNATURE_LENGTH] {
         self.0.to_bytes()
     }
 }
