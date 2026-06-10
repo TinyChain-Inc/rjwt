@@ -50,6 +50,14 @@ impl PyActor {
         Ok(Self(Actor::with_verifying_key(id, key)))
     }
 
+    #[cfg(feature = "falcon")]
+    #[staticmethod]
+    fn new_falcon512(id: &str) -> PyResult<Self> {
+        let id = A::from_str(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let actor = Actor::new_falcon512(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(Self(actor))
+    }
+
     /// Return the actor identifier as a string
     fn id(&self) -> String {
         self.0.id().to_string()
