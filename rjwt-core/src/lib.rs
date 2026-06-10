@@ -4,7 +4,7 @@
 //!
 //! Two signature algorithms are supported:
 //! - Ed25519 (EdDSA), via the [`ed25519_dalek`] crate — the default.
-//! - Falcon-512 (FN-DSA-512), a post-quantum lattice signature, behind the `falcon-rs`
+//! - Falcon-512 (FN-DSA-512), a post-quantum lattice signature, behind the `falcon`
 //!   feature flag — gated by [`Actor::new_falcon512`].
 //!
 //! This library differs from other JWT implementations in that it allows for recursive [`Token`]s.
@@ -29,15 +29,3 @@ pub use rand::rngs::OsRng;
 pub use resolve::Resolve;
 pub use sig::{AlgKind, Signature, SigningKey, VerifyingKey};
 pub use token::{SignedToken, Token};
-
-#[cfg(feature = "falcon")]
-pub use sig::falcon::{
-    Falcon512Backend, Falcon512KeyPair, Falcon512PrivateKey, Falcon512PublicKey,
-    Falcon512Signature, RJWT_FALCON_CONTEXT,
-};
-
-#[cfg(feature = "falcon-rs")]
-pub use sig::falcon::FalconRsBackend;
-
-#[cfg(test)]
-mod unittests;

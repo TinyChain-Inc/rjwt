@@ -61,18 +61,18 @@ fn main() {
     let bobs_id = "bob".to_string();
     let example_dot_com = "example.com".to_string();
 
-    let actor_bob = Actor::new_falcon512(bobs_id.clone()).expect("falcon-rs available");
+    let actor_bob = Actor::new_falcon512(bobs_id.clone()).expect("falcon available");
     let example = Resolver::new(example_dot_com.clone(), [actor_bob.clone()], vec![]);
 
     let retailer_dot_com = "retailer.com".to_string();
-    let retail_app = Actor::new_falcon512("app".to_string()).expect("falcon-rs available");
+    let retail_app = Actor::new_falcon512("app".to_string()).expect("falcon available");
     let retailer = Resolver::new(
         retailer_dot_com.clone(),
         [retail_app.clone()],
         vec![example.clone()],
     );
 
-    let bank_account = Actor::new_falcon512("bank".to_string()).expect("falcon-rs available");
+    let bank_account = Actor::new_falcon512("bank".to_string()).expect("falcon available");
     let bank = Resolver::new(
         "bank.com".to_string(),
         [bank_account.clone()],

@@ -14,9 +14,8 @@ categories = ["authentication", "web-programming"]
 name = "rjwt_core"
 
 [features]
-default = ["falcon-rs"]
-falcon-rs = ["falcon", "dep:falcon-rs"]
-falcon = ["dep:zeroize"]
+default = ["falcon"]
+falcon = ["dep:zeroize", "dep:falcon-rs"]
 
 [dependencies]
 base64 = "0.22"
