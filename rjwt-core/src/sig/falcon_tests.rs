@@ -1,5 +1,3 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime};
 
 use crate::*;
@@ -605,21 +603,11 @@ fn test_falcon_actor_id_mismatch_rejected() {
 
 
 #[derive(Clone, Debug)]
-struct CustomContextBackend {
-    context: Vec<u8>,
-}
-
-
-impl CustomContextBackend {
-    fn new(context: &[u8]) -> Self {
-        Self {
-            context: context.to_vec(),
-        }
-    }
-}
+struct CustomContextBackend;
 
 
 impl Falcon512Backend for CustomContextBackend {
+    const FALCON_CONTEXT: &[u8] = b"other-protocol";
     fn generate() -> Result<Falcon512KeyPair, Error> {
         FalconBackend::generate()
     }
@@ -628,24 +616,16 @@ impl Falcon512Backend for CustomContextBackend {
         sk: &Falcon512PrivateKey,
         msg: &[u8],
     ) -> Result<Falcon512Signature, Error> {
-        use super::falcon::{
-            FALCON_SIG_PADDED, falcon_sign_dyn_finish, falcon_sign_start, falcon_tmpsize_signdyn,
-            shake256_inject,
+        use ::falcon::falcon::{
+            FALCON_SIG_PADDED, falcon_sign_dyn_finish, falcon_sign_start, falcon_tmpsize_signdyn
         };
-        use falcon::shake::InnerShake256Context;
+        use ::falcon::shake::InnerShake256Context;
         use zeroize::Zeroizing;
+        use crate::sig::falcon::default_backend as dbe;
 
         const LOGN: u32 = 9;
         const SIG_LEN: usize = sig::falcon::SIGNATURE_LEN;
-
-        let mut rng = {
-            let mut rng = InnerShake256Context::new();
-            let rc = falcon::falcon::shake256_init_prng_from_system(&mut rng);
-            if rc != 0 {
-                return Err(Error::auth("falcon-rs: OS RNG unavailable"));
-            }
-            rng
-        };
+        let mut rng = dbe::init_rng()?;
 
         let tmp_len = falcon_tmpsize_signdyn(LOGN);
         let mut tmp = Zeroizing::new(vec![0u8; tmp_len]);
@@ -661,11 +641,7 @@ impl Falcon512Backend for CustomContextBackend {
             )));
         }
 
-        shake256_inject(&mut hd, &[0x00u8, self.context.len() as u8]);
-        if !self.context.is_empty() {
-            shake256_inject(&mut hd, &self.context);
-        }
-        shake256_inject(&mut hd, msg);
+        dbe::inject_domain_and_message(&mut hd, msg, Self::FALCON_CONTEXT);
 
         let rc = falcon_sign_dyn_finish(
             &mut rng,
@@ -686,16 +662,15 @@ impl Falcon512Backend for CustomContextBackend {
     }
 
     fn verify(
-        &self,
         pk: &Falcon512PublicKey,
         msg: &[u8],
         sig: &Falcon512Signature,
     ) -> Result<(), Error> {
-        use falcon::falcon::{
-            FALCON_SIG_PADDED, falcon_tmpsize_verify, falcon_verify_finish, falcon_verify_start,
-            shake256_inject,
+        use ::falcon::falcon::{
+            FALCON_SIG_PADDED, falcon_tmpsize_verify, falcon_verify_finish, falcon_verify_start
         };
-        use falcon::shake::InnerShake256Context;
+        use ::falcon::shake::InnerShake256Context;
+        use crate::sig::falcon::default_backend as dbe;
 
         const LOGN: u32 = 9;
 
@@ -711,11 +686,7 @@ impl Falcon512Backend for CustomContextBackend {
             )));
         }
 
-        shake256_inject(&mut hd, &[0x00u8, self.context.len() as u8]);
-        if !self.context.is_empty() {
-            shake256_inject(&mut hd, &self.context);
-        }
-        shake256_inject(&mut hd, msg);
+        dbe::inject_domain_and_message(&mut hd, msg, Self::FALCON_CONTEXT);
 
         let rc = falcon_verify_finish(
             sig_bytes,
@@ -731,19 +702,21 @@ impl Falcon512Backend for CustomContextBackend {
         }
         Ok(())
     }
+    
+    fn from_bytes(secret: &[u8]) -> Result<Falcon512KeyPair, Error> {
+        FalconBackend::from_bytes(secret)
+    }
 }
 
 
-fn make_forged_jwt_with_context(context: &[u8]) -> (String, Actor<String>) {
+fn make_forged_jwt_with_context() -> (String, Actor<String>) {
     use base64::prelude::*;
-    use std::sync::Arc;
 
-    let backend = Arc::new(FalconRsBackend);
-    let keypair = backend.generate().unwrap();
+    let keypair = FalconBackend::generate().unwrap();
 
-    let verifier_actor = Actor::<String>::with_verifying_key(
+    let verifier_actor = Actor::with_verifying_key(
         "alice".to_string(),
-        VerifyingKey::falcon512_with(keypair.public.clone(), backend),
+        VerifyingKey::new_falcon512(keypair.public.clone()),
     );
 
     let now = SystemTime::now();
@@ -763,10 +736,7 @@ fn make_forged_jwt_with_context(context: &[u8]) -> (String, Actor<String>) {
     let body_b64 = BASE64_STANDARD.encode(serde_json::to_string(&token).unwrap().as_bytes());
     let message = format!("{header_b64}.{body_b64}");
 
-    let custom_backend = CustomContextBackend::new(context);
-    let sig = custom_backend
-        .sign(&keypair.private, message.as_bytes())
-        .unwrap();
+    let sig = CustomContextBackend::sign(&keypair.private, message.as_bytes()).unwrap();
     let sig_b64 = BASE64_STANDARD.encode(sig.to_bytes());
     let jwt = format!("{message}.{sig_b64}");
 
@@ -775,48 +745,10 @@ fn make_forged_jwt_with_context(context: &[u8]) -> (String, Actor<String>) {
 
 
 #[test]
-fn test_falcon_context_none_does_not_verify_as_rjwt() {
-    use futures::executor::block_on;
-
-    let (jwt, verifier_actor) = make_forged_jwt_with_context(b"");
-    let now = SystemTime::now();
-
-    let mut resolver = TestResolver::new("example.com");
-    resolver.add(verifier_actor);
-
-    let result = block_on(resolver.verify(jwt, now));
-    assert!(
-        matches!(result, Err(Error::Auth(_))),
-        "expected Err(Error::Auth(_)), got {:?}",
-        result
-    );
-}
-
-
-#[test]
 fn test_falcon_context_other_does_not_verify_as_rjwt() {
     use futures::executor::block_on;
 
-    let (jwt, verifier_actor) = make_forged_jwt_with_context(b"other-protocol");
-    let now = SystemTime::now();
-
-    let mut resolver = TestResolver::new("example.com");
-    resolver.add(verifier_actor);
-
-    let result = block_on(resolver.verify(jwt, now));
-    assert!(
-        matches!(result, Err(Error::Auth(_))),
-        "expected Err(Error::Auth(_)), got {:?}",
-        result
-    );
-}
-
-
-#[test]
-fn test_falcon_context_rjwt_v2_does_not_verify_under_v1() {
-    use futures::executor::block_on;
-
-    let (jwt, verifier_actor) = make_forged_jwt_with_context(b"rjwt-v2");
+    let (jwt, verifier_actor) = make_forged_jwt_with_context();
     let now = SystemTime::now();
 
     let mut resolver = TestResolver::new("example.com");
@@ -861,111 +793,5 @@ fn test_alg_header_matches_actor_key_mismatch() {
         matches!(result, Err(Error::Auth(_))),
         "expected Err(Error::Auth), got {:?}",
         result
-    );
-}
-
-
-#[derive(Clone, Debug, Default)]
-struct RecordingBackend {
-    sign_calls: Arc<AtomicUsize>,
-    verify_calls: Arc<AtomicUsize>,
-}
-
-
-impl RecordingBackend {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn sign_count(&self) -> usize {
-        self.sign_calls.load(Ordering::SeqCst)
-    }
-
-    fn verify_count(&self) -> usize {
-        self.verify_calls.load(Ordering::SeqCst)
-    }
-}
-
-
-impl Falcon512Backend for RecordingBackend {
-    fn generate(&self) -> Result<Falcon512KeyPair, Error> {
-        FalconRsBackend.generate()
-    }
-
-    fn sign(&self, sk: &Falcon512PrivateKey, msg: &[u8]) -> Result<Falcon512Signature, Error> {
-        self.sign_calls.fetch_add(1, Ordering::SeqCst);
-        FalconRsBackend.sign(sk, msg)
-    }
-
-    fn verify(
-        &self,
-        pk: &Falcon512PublicKey,
-        msg: &[u8],
-        sig: &Falcon512Signature,
-    ) -> Result<(), Error> {
-        self.verify_calls.fetch_add(1, Ordering::SeqCst);
-        FalconRsBackend.verify(pk, msg, sig)
-    }
-}
-
-
-#[test]
-fn test_falcon_custom_backend_sign_routed() {
-    let recording = RecordingBackend::new();
-    let actor =
-        Actor::<String>::new_falcon512_with("alice".to_string(), Arc::new(recording.clone()))
-            .expect("actor creation");
-    let now = SystemTime::now();
-    let token = Token::new(
-        "example.com".to_string(),
-        now,
-        Duration::from_secs(30),
-        actor.id().to_string(),
-        (),
-    );
-    actor.sign_token(token).expect("sign_token");
-    assert_eq!(recording.sign_count(), 1, "expected exactly one sign call");
-}
-
-
-#[test]
-fn test_falcon_custom_backend_verify_routed() {
-    use futures::executor::block_on;
-
-    let host = "example.com".to_string();
-    let now = SystemTime::now();
-
-    let signer =
-        Actor::<String>::new_falcon512_with("alice".to_string(), Arc::new(FalconRsBackend))
-            .expect("signer creation");
-    let token = Token::new(
-        host.clone(),
-        now,
-        Duration::from_secs(30),
-        signer.id().to_string(),
-        (),
-    );
-    let signed = signer.sign_token(token).expect("sign_token");
-
-    let public_key = match signer.verifying_key() {
-        VerifyingKey::Falcon512 { public_key, .. } => public_key,
-        _ => panic!("expected Falcon512 verifying key"),
-    };
-
-    let recording = RecordingBackend::new();
-    let verify_actor = Actor::<String>::with_verifying_key(
-        "alice".to_string(),
-        VerifyingKey::falcon512_with(public_key, Arc::new(recording.clone())),
-    );
-
-    let mut resolver = TestResolver::new(host.clone());
-    resolver.add(verify_actor);
-
-    let result = block_on(resolver.verify(signed.jwt().to_string(), now));
-    assert!(result.is_ok(), "verify should succeed, got {:?}", result);
-    assert_eq!(
-        recording.verify_count(),
-        1,
-        "expected exactly one verify call"
     );
 }

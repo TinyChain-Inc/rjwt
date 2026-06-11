@@ -16,12 +16,12 @@ use falcon::Falcon512Backend;
 use falcon::FalconBackend;
 
 use crate::error::Error;
-use crate::sig::ed25519::Ed25519Signature;
-use crate::sig::ed25519::Ed25519VerifyingKey;
+use ed25519::Ed25519Signature;
+use ed25519::Ed25519VerifyingKey;
 #[cfg(feature = "falcon")]
-use crate::sig::falcon::Falcon512PublicKey;
+use falcon::Falcon512PublicKey;
 #[cfg(feature = "falcon")]
-use crate::sig::falcon::Falcon512Signature;
+use falcon::Falcon512Signature;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum AlgKind {
@@ -198,7 +198,7 @@ impl Clone for VerifyingKey {
     fn clone(&self) -> Self {
         match &self.inner {
             VerifyingKeyTypes::Ed25519(k) => Self {
-                inner: VerifyingKeyTypes::Ed25519(*k.clone())
+                inner: VerifyingKeyTypes::Ed25519(k.clone())
             },
             #[cfg(feature = "falcon")]
             VerifyingKeyTypes::Falcon512(pk) => Self {

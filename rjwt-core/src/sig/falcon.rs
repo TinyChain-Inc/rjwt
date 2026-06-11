@@ -4,9 +4,9 @@ use zeroize::Zeroizing;
 
 use crate::error::Error;
 
-const PUBLIC_KEY_LEN: usize = 897;
-const PRIVATE_KEY_LEN: usize = 1281;
-const SIGNATURE_LEN: usize = 666; // FALCON_SIG_PADDED size for FN-DSA-512 (logn=9); see ADR-002.
+pub(super) const PUBLIC_KEY_LEN: usize = 897;
+pub(super) const PRIVATE_KEY_LEN: usize = 1281;
+pub(super) const SIGNATURE_LEN: usize = 666; // FALCON_SIG_PADDED size for FN-DSA-512 (logn=9); see ADR-002.
 
 #[derive(Clone)]
 pub(crate) struct Falcon512PublicKey(Box<[u8; PUBLIC_KEY_LEN]>);
@@ -90,7 +90,7 @@ impl Falcon512Signature {
 }
 
 
-mod default_backend {
+pub(crate) mod default_backend {
     use falcon::FnDsaKeyPair;
     use falcon::falcon::{
         FALCON_SIG_PADDED, falcon_sign_dyn_finish, falcon_sign_start, falcon_tmpsize_signdyn,
@@ -112,11 +112,11 @@ mod default_backend {
     #[derive(Clone, Debug, Default)]
     pub struct FalconRsBackend;
 
-    fn map_err(rc: i32) -> Error {
+    pub(crate) fn map_err(rc: i32) -> Error {
         Error::auth(format!("falcon-rs low-level error: {rc}"))
     }
 
-    fn init_rng() -> Result<InnerShake256Context, Error> {
+    pub(crate) fn init_rng() -> Result<InnerShake256Context, Error> {
         let mut rng = InnerShake256Context::new();
         let rc = falcon::falcon::shake256_init_prng_from_system(&mut rng);
         if rc != 0 {
@@ -125,7 +125,7 @@ mod default_backend {
         Ok(rng)
     }
 
-    fn inject_domain_and_message(hd: &mut InnerShake256Context, msg: &[u8], context: &[u8]) {
+    pub(crate) fn inject_domain_and_message(hd: &mut InnerShake256Context, msg: &[u8], context: &[u8]) {
         // FIPS 206 pure-FN-DSA domain prefix for DomainSeparation::Context:
         //   ph_flag (0x00) || ctx_len || ctx_bytes || raw_message
         // Mirrors safe_api::DomainSeparation::inject_header + inject_message.
