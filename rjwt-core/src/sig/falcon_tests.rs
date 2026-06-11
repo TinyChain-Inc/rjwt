@@ -1,8 +1,11 @@
 use std::time::{Duration, SystemTime};
 
-use crate::*;
+use super::falcon::{
+    Falcon512Backend, Falcon512KeyPair, Falcon512PrivateKey, Falcon512PublicKey,
+    Falcon512Signature, FalconBackend, PRIVATE_KEY_LEN, PUBLIC_KEY_LEN, SIGNATURE_LEN,
+};
 use super::*;
-use super::falcon::{Falcon512KeyPair, Falcon512PublicKey, Falcon512PrivateKey, Falcon512Signature, Falcon512Backend, FalconBackend, PRIVATE_KEY_LEN, PUBLIC_KEY_LEN, SIGNATURE_LEN};
+use crate::*;
 
 #[test]
 fn test_falcon_public_key_from_bytes_wrong_length() {
@@ -14,7 +17,6 @@ fn test_falcon_public_key_from_bytes_wrong_length() {
     assert!(result.is_ok());
 }
 
-
 #[test]
 fn test_falcon_signature_from_bytes_wrong_length() {
     let result = Falcon512Signature::from_bytes(&[0u8; SIGNATURE_LEN]);
@@ -25,14 +27,12 @@ fn test_falcon_signature_from_bytes_wrong_length() {
     assert!(matches!(result, Err(Error::Format(_))));
 }
 
-
 #[test]
 fn test_falcon_public_key_byte_roundtrip() {
     let some_897_bytes = [42u8; PUBLIC_KEY_LEN];
     let pk = Falcon512PublicKey::from_bytes(&some_897_bytes).unwrap();
     assert_eq!(pk.as_bytes(), &some_897_bytes[..]);
 }
-
 
 #[test]
 fn test_sig_signature_from_bytes_falcon() {
@@ -43,7 +43,6 @@ fn test_sig_signature_from_bytes_falcon() {
     assert!(matches!(result, Err(Error::Format(_))));
 }
 
-
 #[test]
 fn test_alg_kind_jwt_name_roundtrip() {
     for alg in [AlgKind::Ed25519, AlgKind::Falcon512] {
@@ -51,12 +50,10 @@ fn test_alg_kind_jwt_name_roundtrip() {
     }
 }
 
-
 struct TestResolver {
     hostname: String,
     actors: std::collections::HashMap<(String, String), Actor<String>>,
 }
-
 
 impl TestResolver {
     fn new(hostname: impl Into<String>) -> Self {
@@ -71,7 +68,6 @@ impl TestResolver {
             .insert((self.hostname.clone(), actor.id().clone()), actor);
     }
 }
-
 
 impl Resolve for TestResolver {
     type HostId = String;
@@ -92,11 +88,9 @@ impl Resolve for TestResolver {
     }
 }
 
-
 fn falcon_actor(id: &str) -> Actor<String> {
     Actor::<String>::new_falcon512(id.to_string()).expect("falcon actor")
 }
-
 
 #[test]
 fn test_falcon_new_falcon512_default_constructor() {
@@ -116,7 +110,6 @@ fn test_falcon_new_falcon512_default_constructor() {
     assert_eq!(alg, AlgKind::Falcon512);
 }
 
-
 #[test]
 fn test_falcon_sign_verify_roundtrip() {
     let actor = falcon_actor("alice");
@@ -130,8 +123,7 @@ fn test_falcon_sign_verify_roundtrip() {
     let signed = actor.sign_token(token).unwrap();
     let (alg, _) = token::decode_token::<String, String, ()>(signed.jwt()).unwrap();
     assert_eq!(alg, AlgKind::Falcon512);
-    let (message, signature) =
-        token::token_signature(signed.jwt(), AlgKind::Falcon512).unwrap();
+    let (message, signature) = token::token_signature(signed.jwt(), AlgKind::Falcon512).unwrap();
     assert!(
         actor
             .verifying_key()
@@ -139,7 +131,6 @@ fn test_falcon_sign_verify_roundtrip() {
             .is_ok()
     );
 }
-
 
 #[test]
 fn test_falcon_depth1_under_8kb() {
@@ -158,7 +149,6 @@ fn test_falcon_depth1_under_8kb() {
         signed.jwt().len()
     );
 }
-
 
 #[test]
 fn test_falcon_depth2_chain_under_8kb() {
@@ -187,7 +177,6 @@ fn test_falcon_depth2_chain_under_8kb() {
         signed_child.jwt().len()
     );
 }
-
 
 #[test]
 fn test_falcon_signing_is_randomized() {
@@ -218,7 +207,6 @@ fn test_falcon_signing_is_randomized() {
     assert!(actor.verifying_key().verify(msg2.as_bytes(), &s2).is_ok());
 }
 
-
 #[test]
 fn test_falcon_actor_clone_drops_private_key() {
     let actor = falcon_actor("alice");
@@ -233,8 +221,7 @@ fn test_falcon_actor_clone_drops_private_key() {
         (),
     );
     let signed = actor.sign_token(token).unwrap();
-    let (message, signature) =
-        token::token_signature(signed.jwt(), AlgKind::Falcon512).unwrap();
+    let (message, signature) = token::token_signature(signed.jwt(), AlgKind::Falcon512).unwrap();
     assert!(
         cloned
             .verifying_key()
@@ -242,7 +229,6 @@ fn test_falcon_actor_clone_drops_private_key() {
             .is_ok()
     );
 }
-
 
 #[test]
 fn test_falcon_signature_is_exactly_666_bytes() {
@@ -258,7 +244,6 @@ fn test_falcon_signature_is_exactly_666_bytes() {
     let (_, signature) = token::token_signature(signed.jwt(), AlgKind::Falcon512).unwrap();
     assert_eq!(signature.to_bytes().len(), 666);
 }
-
 
 #[test]
 fn test_decode_alg_fndsa512_dispatches_to_falcon() {
@@ -290,7 +275,6 @@ fn test_decode_alg_fndsa512_dispatches_to_falcon() {
         Some(&()),
     );
 }
-
 
 #[test]
 fn test_chain_alg_mismatch_outer_eddsa_inner_falcon_rejected() {
@@ -333,7 +317,6 @@ fn test_chain_alg_mismatch_outer_eddsa_inner_falcon_rejected() {
     }
 }
 
-
 #[test]
 fn test_chain_alg_mismatch_outer_falcon_inner_eddsa_rejected() {
     use futures::executor::block_on;
@@ -374,7 +357,6 @@ fn test_chain_alg_mismatch_outer_falcon_inner_eddsa_rejected() {
         other => panic!("expected Err(Error::Auth(_)), got {:?}", other),
     }
 }
-
 
 #[test]
 fn test_pre_pass_fails_before_resolver_invoked() {
@@ -430,7 +412,6 @@ fn test_pre_pass_fails_before_resolver_invoked() {
     }
 }
 
-
 #[test]
 fn test_falcon_tampered_signature_rejected() {
     use base64::prelude::*;
@@ -467,7 +448,6 @@ fn test_falcon_tampered_signature_rejected() {
         result
     );
 }
-
 
 #[test]
 fn test_falcon_tampered_message_rejected() {
@@ -514,7 +494,6 @@ fn test_falcon_tampered_message_rejected() {
     );
 }
 
-
 #[test]
 fn test_falcon_expired_token_rejected() {
     use futures::executor::block_on;
@@ -543,7 +522,6 @@ fn test_falcon_expired_token_rejected() {
         result
     );
 }
-
 
 #[test]
 fn test_falcon_actor_id_mismatch_rejected() {
@@ -601,10 +579,8 @@ fn test_falcon_actor_id_mismatch_rejected() {
     }
 }
 
-
 #[derive(Clone, Debug)]
 struct CustomContextBackend;
-
 
 impl Falcon512Backend for CustomContextBackend {
     const FALCON_CONTEXT: &[u8] = b"other-protocol";
@@ -612,16 +588,13 @@ impl Falcon512Backend for CustomContextBackend {
         FalconBackend::generate()
     }
 
-    fn sign(
-        sk: &Falcon512PrivateKey,
-        msg: &[u8],
-    ) -> Result<Falcon512Signature, Error> {
+    fn sign(sk: &Falcon512PrivateKey, msg: &[u8]) -> Result<Falcon512Signature, Error> {
+        use crate::sig::falcon::default_backend as dbe;
         use ::falcon::falcon::{
-            FALCON_SIG_PADDED, falcon_sign_dyn_finish, falcon_sign_start, falcon_tmpsize_signdyn
+            FALCON_SIG_PADDED, falcon_sign_dyn_finish, falcon_sign_start, falcon_tmpsize_signdyn,
         };
         use ::falcon::shake::InnerShake256Context;
         use zeroize::Zeroizing;
-        use crate::sig::falcon::default_backend as dbe;
 
         const LOGN: u32 = 9;
         const SIG_LEN: usize = sig::falcon::SIGNATURE_LEN;
@@ -636,9 +609,7 @@ impl Falcon512Backend for CustomContextBackend {
         let mut hd = InnerShake256Context::new();
         let rc = falcon_sign_start(&mut rng, &mut nonce, &mut hd);
         if rc != 0 {
-            return Err(Error::auth(format!(
-                "falcon-rs low-level error: {rc}"
-            )));
+            return Err(Error::auth(format!("falcon-rs low-level error: {rc}")));
         }
 
         dbe::inject_domain_and_message(&mut hd, msg, Self::FALCON_CONTEXT);
@@ -654,23 +625,17 @@ impl Falcon512Backend for CustomContextBackend {
             &mut tmp,
         );
         if rc != 0 {
-            return Err(Error::auth(format!(
-                "falcon-rs low-level error: {rc}"
-            )));
+            return Err(Error::auth(format!("falcon-rs low-level error: {rc}")));
         }
         Falcon512Signature::from_bytes(&sig)
     }
 
-    fn verify(
-        pk: &Falcon512PublicKey,
-        msg: &[u8],
-        sig: &Falcon512Signature,
-    ) -> Result<(), Error> {
+    fn verify(pk: &Falcon512PublicKey, msg: &[u8], sig: &Falcon512Signature) -> Result<(), Error> {
+        use crate::sig::falcon::default_backend as dbe;
         use ::falcon::falcon::{
-            FALCON_SIG_PADDED, falcon_tmpsize_verify, falcon_verify_finish, falcon_verify_start
+            FALCON_SIG_PADDED, falcon_tmpsize_verify, falcon_verify_finish, falcon_verify_start,
         };
         use ::falcon::shake::InnerShake256Context;
-        use crate::sig::falcon::default_backend as dbe;
 
         const LOGN: u32 = 9;
 
@@ -681,9 +646,7 @@ impl Falcon512Backend for CustomContextBackend {
         let mut hd = InnerShake256Context::new();
         let rc = falcon_verify_start(&mut hd, sig_bytes);
         if rc != 0 {
-            return Err(Error::auth(format!(
-                "falcon-rs low-level error: {rc}"
-            )));
+            return Err(Error::auth(format!("falcon-rs low-level error: {rc}")));
         }
 
         dbe::inject_domain_and_message(&mut hd, msg, Self::FALCON_CONTEXT);
@@ -696,18 +659,15 @@ impl Falcon512Backend for CustomContextBackend {
             &mut tmp,
         );
         if rc != 0 {
-            return Err(Error::auth(format!(
-                "falcon-rs low-level error: {rc}"
-            )));
+            return Err(Error::auth(format!("falcon-rs low-level error: {rc}")));
         }
         Ok(())
     }
-    
+
     fn from_bytes(secret: &[u8]) -> Result<Falcon512KeyPair, Error> {
         FalconBackend::from_bytes(secret)
     }
 }
-
 
 fn make_forged_jwt_with_context() -> (String, Actor<String>) {
     use base64::prelude::*;
@@ -728,10 +688,8 @@ fn make_forged_jwt_with_context() -> (String, Actor<String>) {
         (),
     );
 
-    let header_json = serde_json::to_string(&token::TokenHeader::for_alg(
-        sig::AlgKind::Falcon512,
-    ))
-    .unwrap();
+    let header_json =
+        serde_json::to_string(&token::TokenHeader::for_alg(sig::AlgKind::Falcon512)).unwrap();
     let header_b64 = BASE64_STANDARD.encode(header_json.as_bytes());
     let body_b64 = BASE64_STANDARD.encode(serde_json::to_string(&token).unwrap().as_bytes());
     let message = format!("{header_b64}.{body_b64}");
@@ -742,7 +700,6 @@ fn make_forged_jwt_with_context() -> (String, Actor<String>) {
 
     (jwt, verifier_actor)
 }
-
 
 #[test]
 fn test_falcon_context_other_does_not_verify_as_rjwt() {
@@ -761,7 +718,6 @@ fn test_falcon_context_other_does_not_verify_as_rjwt() {
         result
     );
 }
-
 
 #[test]
 fn test_alg_header_matches_actor_key_mismatch() {

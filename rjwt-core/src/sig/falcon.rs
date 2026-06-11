@@ -26,11 +26,7 @@ pub(crate) trait Falcon512Backend: Send + Sync + fmt::Debug {
     const FALCON_CONTEXT: &[u8];
     fn generate() -> Result<Falcon512KeyPair, Error>;
     fn sign(sk: &Falcon512PrivateKey, msg: &[u8]) -> Result<Falcon512Signature, Error>;
-    fn verify(
-        pk: &Falcon512PublicKey,
-        msg: &[u8],
-        sig: &Falcon512Signature,
-    ) -> Result<(), Error>;
+    fn verify(pk: &Falcon512PublicKey, msg: &[u8], sig: &Falcon512Signature) -> Result<(), Error>;
     fn from_bytes(secret: &[u8]) -> Result<Falcon512KeyPair, Error>;
 }
 
@@ -89,7 +85,6 @@ impl Falcon512Signature {
     }
 }
 
-
 pub(crate) mod default_backend {
     use falcon::FnDsaKeyPair;
     use falcon::falcon::{
@@ -99,13 +94,13 @@ pub(crate) mod default_backend {
     use falcon::shake::InnerShake256Context;
     use zeroize::Zeroizing;
 
+    use super::PRIVATE_KEY_LEN;
     use super::{
         Falcon512Backend, Falcon512KeyPair, Falcon512PrivateKey, Falcon512PublicKey,
         Falcon512Signature, SIGNATURE_LEN,
     };
-    use crate::sig::AlgKind;
     use crate::error::Error;
-    use super::PRIVATE_KEY_LEN;
+    use crate::sig::AlgKind;
 
     const LOGN: u32 = 9;
 
@@ -125,7 +120,11 @@ pub(crate) mod default_backend {
         Ok(rng)
     }
 
-    pub(crate) fn inject_domain_and_message(hd: &mut InnerShake256Context, msg: &[u8], context: &[u8]) {
+    pub(crate) fn inject_domain_and_message(
+        hd: &mut InnerShake256Context,
+        msg: &[u8],
+        context: &[u8],
+    ) {
         // FIPS 206 pure-FN-DSA domain prefix for DomainSeparation::Context:
         //   ph_flag (0x00) || ctx_len || ctx_bytes || raw_message
         // Mirrors safe_api::DomainSeparation::inject_header + inject_message.
@@ -214,7 +213,7 @@ pub(crate) mod default_backend {
             }
             Ok(())
         }
-        
+
         fn from_bytes(pk: &[u8]) -> Result<Falcon512KeyPair, Error> {
             let pk: &[u8; PRIVATE_KEY_LEN] = pk.try_into().map_err(|_| {
                 Error::format(format!(
@@ -227,12 +226,10 @@ pub(crate) mod default_backend {
             let kp = FnDsaKeyPair::from_private_key(pk)
                 .map_err(|e| Error::format(format!("falcon-rs: {e:?}")))?;
 
-            Ok(
-                Falcon512KeyPair { 
-                    public: Falcon512PublicKey::from_bytes(kp.public_key())?,
-                    private: Falcon512PrivateKey::from_bytes(kp.private_key())? 
-                }
-            )
+            Ok(Falcon512KeyPair {
+                public: Falcon512PublicKey::from_bytes(kp.public_key())?,
+                private: Falcon512PrivateKey::from_bytes(kp.private_key())?,
+            })
         }
     }
 }

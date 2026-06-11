@@ -49,12 +49,10 @@ impl<A> Actor<A> {
             #[cfg(feature = "falcon")]
             AlgKind::Falcon512 => Ok(Self {
                 id,
-                key: Key::Private(SigningKey::generate_falcon512()?)
-            })
+                key: Key::Private(SigningKey::generate_falcon512()?),
+            }),
         }
-        
     }
-
 
     /// Return an `Actor` with a newly-generated Ed25519 keypair.
     pub fn new(id: A) -> Self {
@@ -70,7 +68,7 @@ impl<A> Actor<A> {
         let signing_key = SigningKey::generate_falcon512()?;
         Ok(Self {
             id,
-            key: Key::Private(signing_key)
+            key: Key::Private(signing_key),
         })
     }
 
