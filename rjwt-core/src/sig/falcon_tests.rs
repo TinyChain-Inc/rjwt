@@ -2,7 +2,7 @@ use std::time::{Duration, SystemTime};
 
 use super::falcon::{
     Falcon512Backend, Falcon512KeyPair, Falcon512PrivateKey, Falcon512PublicKey,
-    Falcon512Signature, FalconBackend, PRIVATE_KEY_LEN, PUBLIC_KEY_LEN, SIGNATURE_LEN,
+    Falcon512Signature, FalconBackend, PUBLIC_KEY_LEN, SIGNATURE_LEN,
 };
 use super::*;
 use crate::*;
@@ -695,7 +695,7 @@ fn make_forged_jwt_with_context() -> (String, Actor<String>) {
     let message = format!("{header_b64}.{body_b64}");
 
     let sig = CustomContextBackend::sign(&keypair.private, message.as_bytes()).unwrap();
-    let sig_b64 = BASE64_STANDARD.encode(sig.to_bytes());
+    let sig_b64 = BASE64_STANDARD.encode(sig.as_bytes());
     let jwt = format!("{message}.{sig_b64}");
 
     (jwt, verifier_actor)
