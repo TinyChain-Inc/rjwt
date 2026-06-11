@@ -16,12 +16,12 @@ use falcon::Falcon512Backend;
 use falcon::FalconBackend;
 
 use crate::error::Error;
-use crate::sig::ed25519::Ed25519Signature;
-use crate::sig::ed25519::Ed25519VerifyingKey;
+use ed25519::Ed25519Signature;
+use ed25519::Ed25519VerifyingKey;
 #[cfg(feature = "falcon")]
-use crate::sig::falcon::Falcon512PublicKey;
+use falcon::Falcon512PublicKey;
 #[cfg(feature = "falcon")]
-use crate::sig::falcon::Falcon512Signature;
+use falcon::Falcon512Signature;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum AlgKind {
@@ -52,7 +52,7 @@ impl AlgKind {
 enum SigningKeyTypes {
     Ed25519(ed25519::Ed25519SigningKey),
     #[cfg(feature = "falcon")]
-    Falcon512 (falcon::Falcon512KeyPair),
+    Falcon512(falcon::Falcon512KeyPair),
 }
 
 pub struct SigningKey {
@@ -66,7 +66,7 @@ enum VerifyingKeyTypes {
 }
 
 pub struct VerifyingKey {
-    inner: VerifyingKeyTypes
+    inner: VerifyingKeyTypes,
 }
 
 enum SignatureTypes {
@@ -76,7 +76,7 @@ enum SignatureTypes {
 }
 
 pub struct Signature {
-    inner: SignatureTypes
+    inner: SignatureTypes,
 }
 
 impl SigningKey {
@@ -90,7 +90,7 @@ impl SigningKey {
 
     pub fn generate_ed25519() -> Self {
         Self {
-            inner: SigningKeyTypes::Ed25519(ed25519::Ed25519SigningKey::generate())
+            inner: SigningKeyTypes::Ed25519(ed25519::Ed25519SigningKey::generate()),
         }
     }
 
@@ -98,7 +98,7 @@ impl SigningKey {
     pub fn generate_falcon512() -> Result<Self, Error> {
         let kp = FalconBackend::generate()?;
         Ok(Self {
-            inner: SigningKeyTypes::Falcon512(kp)
+            inner: SigningKeyTypes::Falcon512(kp),
         })
     }
 
@@ -106,7 +106,7 @@ impl SigningKey {
         match &self.inner {
             SigningKeyTypes::Ed25519(k) => VerifyingKey::new(k.verifying_key()),
             #[cfg(feature = "falcon")]
-            SigningKeyTypes::Falcon512(kp ) => VerifyingKey::new_falcon512(kp.public.clone())
+            SigningKeyTypes::Falcon512(kp) => VerifyingKey::new_falcon512(kp.public.clone()),
         }
     }
 
@@ -114,21 +114,22 @@ impl SigningKey {
         match &self.inner {
             SigningKeyTypes::Ed25519(k) => Ok(Signature::new(k.sign(msg)?)),
             #[cfg(feature = "falcon")]
-            SigningKeyTypes::Falcon512(kp) => {
-                Ok(Signature::new_falcon512(FalconBackend::sign(&kp.private, msg)?))
-            }
+            SigningKeyTypes::Falcon512(kp) => Ok(Signature::new_falcon512(FalconBackend::sign(
+                &kp.private,
+                msg,
+            )?)),
         }
     }
 
     pub fn from_bytes(alg: AlgKind, bytes: &[u8]) -> Result<Self, Error> {
         match alg {
             AlgKind::Ed25519 => Ok(Self {
-                inner: SigningKeyTypes::Ed25519(ed25519::Ed25519SigningKey::from_bytes(bytes)?)
+                inner: SigningKeyTypes::Ed25519(ed25519::Ed25519SigningKey::from_bytes(bytes)?),
             }),
             #[cfg(feature = "falcon")]
             AlgKind::Falcon512 => Ok(Self {
-                inner: SigningKeyTypes::Falcon512(FalconBackend::from_bytes(bytes)?)
-            })
+                inner: SigningKeyTypes::Falcon512(FalconBackend::from_bytes(bytes)?),
+            }),
         }
     }
 }
@@ -145,12 +146,12 @@ impl VerifyingKey {
     pub fn from_bytes(alg: AlgKind, bytes: &[u8]) -> Result<Self, Error> {
         match alg {
             AlgKind::Ed25519 => Ok(Self {
-                inner: VerifyingKeyTypes::Ed25519(ed25519::Ed25519VerifyingKey::from_bytes(bytes)?)
+                inner: VerifyingKeyTypes::Ed25519(ed25519::Ed25519VerifyingKey::from_bytes(bytes)?),
             }),
             #[cfg(feature = "falcon")]
             AlgKind::Falcon512 => Ok(Self {
-                inner: VerifyingKeyTypes::Falcon512(falcon::Falcon512PublicKey::from_bytes(bytes)?)
-            })
+                inner: VerifyingKeyTypes::Falcon512(falcon::Falcon512PublicKey::from_bytes(bytes)?),
+            }),
         }
     }
 
@@ -164,15 +165,11 @@ impl VerifyingKey {
 
     pub fn verify(&self, msg: &[u8], sig: &Signature) -> Result<(), Error> {
         match (&self.inner, &sig.inner) {
-            (
-                VerifyingKeyTypes::Ed25519(k), 
-                SignatureTypes::Ed25519(s)
-            ) => k.verify(msg, s),
+            (VerifyingKeyTypes::Ed25519(k), SignatureTypes::Ed25519(s)) => k.verify(msg, s),
             #[cfg(feature = "falcon")]
-            (
-                VerifyingKeyTypes::Falcon512(pk),
-                SignatureTypes::Falcon512(s),
-            ) => FalconBackend::verify(pk, msg, s),
+            (VerifyingKeyTypes::Falcon512(pk), SignatureTypes::Falcon512(s)) => {
+                FalconBackend::verify(pk, msg, s)
+            }
             #[cfg(feature = "falcon")]
             _ => Err(Error::auth(
                 "verifying key and signature algorithm mismatch",
@@ -182,14 +179,14 @@ impl VerifyingKey {
 
     fn new(key: Ed25519VerifyingKey) -> Self {
         Self {
-            inner: VerifyingKeyTypes::Ed25519(key)
+            inner: VerifyingKeyTypes::Ed25519(key),
         }
     }
 
     #[cfg(feature = "falcon")]
     fn new_falcon512(key: Falcon512PublicKey) -> Self {
         Self {
-            inner: VerifyingKeyTypes::Falcon512(key)
+            inner: VerifyingKeyTypes::Falcon512(key),
         }
     }
 }
@@ -198,12 +195,12 @@ impl Clone for VerifyingKey {
     fn clone(&self) -> Self {
         match &self.inner {
             VerifyingKeyTypes::Ed25519(k) => Self {
-                inner: VerifyingKeyTypes::Ed25519(*k.clone())
+                inner: VerifyingKeyTypes::Ed25519(k.clone()),
             },
             #[cfg(feature = "falcon")]
             VerifyingKeyTypes::Falcon512(pk) => Self {
-                inner: VerifyingKeyTypes::Falcon512(pk.clone())
-            }
+                inner: VerifyingKeyTypes::Falcon512(pk.clone()),
+            },
         }
     }
 }
@@ -220,11 +217,11 @@ impl Signature {
     pub fn from_bytes(alg: AlgKind, bytes: &[u8]) -> Result<Self, Error> {
         match alg {
             AlgKind::Ed25519 => Ok(Self {
-                inner: SignatureTypes::Ed25519(ed25519::Ed25519Signature::from_bytes(bytes)?)
+                inner: SignatureTypes::Ed25519(ed25519::Ed25519Signature::from_bytes(bytes)?),
             }),
             #[cfg(feature = "falcon")]
             AlgKind::Falcon512 => Ok(Self {
-                inner: SignatureTypes::Falcon512(falcon::Falcon512Signature::from_bytes(bytes)?)
+                inner: SignatureTypes::Falcon512(falcon::Falcon512Signature::from_bytes(bytes)?),
             }),
         }
     }
@@ -239,14 +236,14 @@ impl Signature {
 
     fn new(sig: Ed25519Signature) -> Self {
         Self {
-            inner: SignatureTypes::Ed25519(sig)
+            inner: SignatureTypes::Ed25519(sig),
         }
     }
 
     #[cfg(feature = "falcon")]
     fn new_falcon512(sig: Falcon512Signature) -> Self {
         Self {
-            inner: SignatureTypes::Falcon512(sig)
+            inner: SignatureTypes::Falcon512(sig),
         }
     }
 }

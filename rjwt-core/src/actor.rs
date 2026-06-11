@@ -4,6 +4,7 @@ use std::time::SystemTime;
 use base64::prelude::*;
 use serde::Serialize;
 
+use crate::AlgKind;
 use crate::claims::Claims;
 use crate::error::Error;
 use crate::sig::{SigningKey, VerifyingKey};
@@ -39,6 +40,21 @@ pub struct Actor<A> {
 
 impl<A> Actor<A> {
     /// Return an `Actor` with a newly-generated Ed25519 keypair.
+    pub fn new2(id: A, alg: AlgKind) -> Result<Self, Error> {
+        match alg {
+            AlgKind::Ed25519 => Ok(Self {
+                id,
+                key: Key::Private(SigningKey::generate_ed25519()),
+            }),
+            #[cfg(feature = "falcon")]
+            AlgKind::Falcon512 => Ok(Self {
+                id,
+                key: Key::Private(SigningKey::generate_falcon512()?),
+            }),
+        }
+    }
+
+    /// Return an `Actor` with a newly-generated Ed25519 keypair.
     pub fn new(id: A) -> Self {
         Self {
             id,
@@ -52,7 +68,7 @@ impl<A> Actor<A> {
         let signing_key = SigningKey::generate_falcon512()?;
         Ok(Self {
             id,
-            key: Key::Private(signing_key)
+            key: Key::Private(signing_key),
         })
     }
 

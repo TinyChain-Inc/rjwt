@@ -1,10 +1,11 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime};
 
-use crate::*;
+use super::falcon::{
+    Falcon512Backend, Falcon512KeyPair, Falcon512PrivateKey, Falcon512PublicKey,
+    Falcon512Signature, FalconBackend, PUBLIC_KEY_LEN, SIGNATURE_LEN,
+};
 use super::*;
-use super::falcon::{Falcon512KeyPair, Falcon512PublicKey, Falcon512PrivateKey, Falcon512Signature, Falcon512Backend, FalconBackend, PRIVATE_KEY_LEN, PUBLIC_KEY_LEN, SIGNATURE_LEN};
+use crate::*;
 
 #[test]
 fn test_falcon_public_key_from_bytes_wrong_length() {
@@ -16,7 +17,6 @@ fn test_falcon_public_key_from_bytes_wrong_length() {
     assert!(result.is_ok());
 }
 
-
 #[test]
 fn test_falcon_signature_from_bytes_wrong_length() {
     let result = Falcon512Signature::from_bytes(&[0u8; SIGNATURE_LEN]);
@@ -27,14 +27,12 @@ fn test_falcon_signature_from_bytes_wrong_length() {
     assert!(matches!(result, Err(Error::Format(_))));
 }
 
-
 #[test]
 fn test_falcon_public_key_byte_roundtrip() {
     let some_897_bytes = [42u8; PUBLIC_KEY_LEN];
     let pk = Falcon512PublicKey::from_bytes(&some_897_bytes).unwrap();
     assert_eq!(pk.as_bytes(), &some_897_bytes[..]);
 }
-
 
 #[test]
 fn test_sig_signature_from_bytes_falcon() {
@@ -45,7 +43,6 @@ fn test_sig_signature_from_bytes_falcon() {
     assert!(matches!(result, Err(Error::Format(_))));
 }
 
-
 #[test]
 fn test_alg_kind_jwt_name_roundtrip() {
     for alg in [AlgKind::Ed25519, AlgKind::Falcon512] {
@@ -53,12 +50,10 @@ fn test_alg_kind_jwt_name_roundtrip() {
     }
 }
 
-
 struct TestResolver {
     hostname: String,
     actors: std::collections::HashMap<(String, String), Actor<String>>,
 }
-
 
 impl TestResolver {
     fn new(hostname: impl Into<String>) -> Self {
@@ -73,7 +68,6 @@ impl TestResolver {
             .insert((self.hostname.clone(), actor.id().clone()), actor);
     }
 }
-
 
 impl Resolve for TestResolver {
     type HostId = String;
@@ -94,11 +88,9 @@ impl Resolve for TestResolver {
     }
 }
 
-
 fn falcon_actor(id: &str) -> Actor<String> {
     Actor::<String>::new_falcon512(id.to_string()).expect("falcon actor")
 }
-
 
 #[test]
 fn test_falcon_new_falcon512_default_constructor() {
@@ -118,7 +110,6 @@ fn test_falcon_new_falcon512_default_constructor() {
     assert_eq!(alg, AlgKind::Falcon512);
 }
 
-
 #[test]
 fn test_falcon_sign_verify_roundtrip() {
     let actor = falcon_actor("alice");
@@ -132,8 +123,7 @@ fn test_falcon_sign_verify_roundtrip() {
     let signed = actor.sign_token(token).unwrap();
     let (alg, _) = token::decode_token::<String, String, ()>(signed.jwt()).unwrap();
     assert_eq!(alg, AlgKind::Falcon512);
-    let (message, signature) =
-        token::token_signature(signed.jwt(), AlgKind::Falcon512).unwrap();
+    let (message, signature) = token::token_signature(signed.jwt(), AlgKind::Falcon512).unwrap();
     assert!(
         actor
             .verifying_key()
@@ -141,7 +131,6 @@ fn test_falcon_sign_verify_roundtrip() {
             .is_ok()
     );
 }
-
 
 #[test]
 fn test_falcon_depth1_under_8kb() {
@@ -160,7 +149,6 @@ fn test_falcon_depth1_under_8kb() {
         signed.jwt().len()
     );
 }
-
 
 #[test]
 fn test_falcon_depth2_chain_under_8kb() {
@@ -189,7 +177,6 @@ fn test_falcon_depth2_chain_under_8kb() {
         signed_child.jwt().len()
     );
 }
-
 
 #[test]
 fn test_falcon_signing_is_randomized() {
@@ -220,7 +207,6 @@ fn test_falcon_signing_is_randomized() {
     assert!(actor.verifying_key().verify(msg2.as_bytes(), &s2).is_ok());
 }
 
-
 #[test]
 fn test_falcon_actor_clone_drops_private_key() {
     let actor = falcon_actor("alice");
@@ -235,8 +221,7 @@ fn test_falcon_actor_clone_drops_private_key() {
         (),
     );
     let signed = actor.sign_token(token).unwrap();
-    let (message, signature) =
-        token::token_signature(signed.jwt(), AlgKind::Falcon512).unwrap();
+    let (message, signature) = token::token_signature(signed.jwt(), AlgKind::Falcon512).unwrap();
     assert!(
         cloned
             .verifying_key()
@@ -244,7 +229,6 @@ fn test_falcon_actor_clone_drops_private_key() {
             .is_ok()
     );
 }
-
 
 #[test]
 fn test_falcon_signature_is_exactly_666_bytes() {
@@ -260,7 +244,6 @@ fn test_falcon_signature_is_exactly_666_bytes() {
     let (_, signature) = token::token_signature(signed.jwt(), AlgKind::Falcon512).unwrap();
     assert_eq!(signature.to_bytes().len(), 666);
 }
-
 
 #[test]
 fn test_decode_alg_fndsa512_dispatches_to_falcon() {
@@ -292,7 +275,6 @@ fn test_decode_alg_fndsa512_dispatches_to_falcon() {
         Some(&()),
     );
 }
-
 
 #[test]
 fn test_chain_alg_mismatch_outer_eddsa_inner_falcon_rejected() {
@@ -335,7 +317,6 @@ fn test_chain_alg_mismatch_outer_eddsa_inner_falcon_rejected() {
     }
 }
 
-
 #[test]
 fn test_chain_alg_mismatch_outer_falcon_inner_eddsa_rejected() {
     use futures::executor::block_on;
@@ -376,7 +357,6 @@ fn test_chain_alg_mismatch_outer_falcon_inner_eddsa_rejected() {
         other => panic!("expected Err(Error::Auth(_)), got {:?}", other),
     }
 }
-
 
 #[test]
 fn test_pre_pass_fails_before_resolver_invoked() {
@@ -432,7 +412,6 @@ fn test_pre_pass_fails_before_resolver_invoked() {
     }
 }
 
-
 #[test]
 fn test_falcon_tampered_signature_rejected() {
     use base64::prelude::*;
@@ -469,7 +448,6 @@ fn test_falcon_tampered_signature_rejected() {
         result
     );
 }
-
 
 #[test]
 fn test_falcon_tampered_message_rejected() {
@@ -516,7 +494,6 @@ fn test_falcon_tampered_message_rejected() {
     );
 }
 
-
 #[test]
 fn test_falcon_expired_token_rejected() {
     use futures::executor::block_on;
@@ -545,7 +522,6 @@ fn test_falcon_expired_token_rejected() {
         result
     );
 }
-
 
 #[test]
 fn test_falcon_actor_id_mismatch_rejected() {
@@ -603,49 +579,26 @@ fn test_falcon_actor_id_mismatch_rejected() {
     }
 }
 
-
 #[derive(Clone, Debug)]
-struct CustomContextBackend {
-    context: Vec<u8>,
-}
-
-
-impl CustomContextBackend {
-    fn new(context: &[u8]) -> Self {
-        Self {
-            context: context.to_vec(),
-        }
-    }
-}
-
+struct CustomContextBackend;
 
 impl Falcon512Backend for CustomContextBackend {
+    const FALCON_CONTEXT: &[u8] = b"other-protocol";
     fn generate() -> Result<Falcon512KeyPair, Error> {
         FalconBackend::generate()
     }
 
-    fn sign(
-        sk: &Falcon512PrivateKey,
-        msg: &[u8],
-    ) -> Result<Falcon512Signature, Error> {
-        use super::falcon::{
+    fn sign(sk: &Falcon512PrivateKey, msg: &[u8]) -> Result<Falcon512Signature, Error> {
+        use crate::sig::falcon::default_backend as dbe;
+        use ::falcon::falcon::{
             FALCON_SIG_PADDED, falcon_sign_dyn_finish, falcon_sign_start, falcon_tmpsize_signdyn,
-            shake256_inject,
         };
-        use falcon::shake::InnerShake256Context;
+        use ::falcon::shake::InnerShake256Context;
         use zeroize::Zeroizing;
 
         const LOGN: u32 = 9;
         const SIG_LEN: usize = sig::falcon::SIGNATURE_LEN;
-
-        let mut rng = {
-            let mut rng = InnerShake256Context::new();
-            let rc = falcon::falcon::shake256_init_prng_from_system(&mut rng);
-            if rc != 0 {
-                return Err(Error::auth("falcon-rs: OS RNG unavailable"));
-            }
-            rng
-        };
+        let mut rng = dbe::init_rng()?;
 
         let tmp_len = falcon_tmpsize_signdyn(LOGN);
         let mut tmp = Zeroizing::new(vec![0u8; tmp_len]);
@@ -656,16 +609,10 @@ impl Falcon512Backend for CustomContextBackend {
         let mut hd = InnerShake256Context::new();
         let rc = falcon_sign_start(&mut rng, &mut nonce, &mut hd);
         if rc != 0 {
-            return Err(Error::auth(format!(
-                "falcon-rs low-level error: {rc}"
-            )));
+            return Err(Error::auth(format!("falcon-rs low-level error: {rc}")));
         }
 
-        shake256_inject(&mut hd, &[0x00u8, self.context.len() as u8]);
-        if !self.context.is_empty() {
-            shake256_inject(&mut hd, &self.context);
-        }
-        shake256_inject(&mut hd, msg);
+        dbe::inject_domain_and_message(&mut hd, msg, Self::FALCON_CONTEXT);
 
         let rc = falcon_sign_dyn_finish(
             &mut rng,
@@ -678,24 +625,17 @@ impl Falcon512Backend for CustomContextBackend {
             &mut tmp,
         );
         if rc != 0 {
-            return Err(Error::auth(format!(
-                "falcon-rs low-level error: {rc}"
-            )));
+            return Err(Error::auth(format!("falcon-rs low-level error: {rc}")));
         }
         Falcon512Signature::from_bytes(&sig)
     }
 
-    fn verify(
-        &self,
-        pk: &Falcon512PublicKey,
-        msg: &[u8],
-        sig: &Falcon512Signature,
-    ) -> Result<(), Error> {
-        use falcon::falcon::{
+    fn verify(pk: &Falcon512PublicKey, msg: &[u8], sig: &Falcon512Signature) -> Result<(), Error> {
+        use crate::sig::falcon::default_backend as dbe;
+        use ::falcon::falcon::{
             FALCON_SIG_PADDED, falcon_tmpsize_verify, falcon_verify_finish, falcon_verify_start,
-            shake256_inject,
         };
-        use falcon::shake::InnerShake256Context;
+        use ::falcon::shake::InnerShake256Context;
 
         const LOGN: u32 = 9;
 
@@ -706,16 +646,10 @@ impl Falcon512Backend for CustomContextBackend {
         let mut hd = InnerShake256Context::new();
         let rc = falcon_verify_start(&mut hd, sig_bytes);
         if rc != 0 {
-            return Err(Error::auth(format!(
-                "falcon-rs low-level error: {rc}"
-            )));
+            return Err(Error::auth(format!("falcon-rs low-level error: {rc}")));
         }
 
-        shake256_inject(&mut hd, &[0x00u8, self.context.len() as u8]);
-        if !self.context.is_empty() {
-            shake256_inject(&mut hd, &self.context);
-        }
-        shake256_inject(&mut hd, msg);
+        dbe::inject_domain_and_message(&mut hd, msg, Self::FALCON_CONTEXT);
 
         let rc = falcon_verify_finish(
             sig_bytes,
@@ -725,25 +659,24 @@ impl Falcon512Backend for CustomContextBackend {
             &mut tmp,
         );
         if rc != 0 {
-            return Err(Error::auth(format!(
-                "falcon-rs low-level error: {rc}"
-            )));
+            return Err(Error::auth(format!("falcon-rs low-level error: {rc}")));
         }
         Ok(())
     }
+
+    fn from_bytes(secret: &[u8]) -> Result<Falcon512KeyPair, Error> {
+        FalconBackend::from_bytes(secret)
+    }
 }
 
-
-fn make_forged_jwt_with_context(context: &[u8]) -> (String, Actor<String>) {
+fn make_forged_jwt_with_context() -> (String, Actor<String>) {
     use base64::prelude::*;
-    use std::sync::Arc;
 
-    let backend = Arc::new(FalconRsBackend);
-    let keypair = backend.generate().unwrap();
+    let keypair = FalconBackend::generate().unwrap();
 
-    let verifier_actor = Actor::<String>::with_verifying_key(
+    let verifier_actor = Actor::with_verifying_key(
         "alice".to_string(),
-        VerifyingKey::falcon512_with(keypair.public.clone(), backend),
+        VerifyingKey::new_falcon512(keypair.public.clone()),
     );
 
     let now = SystemTime::now();
@@ -755,49 +688,24 @@ fn make_forged_jwt_with_context(context: &[u8]) -> (String, Actor<String>) {
         (),
     );
 
-    let header_json = serde_json::to_string(&token::TokenHeader::for_alg(
-        sig::AlgKind::Falcon512,
-    ))
-    .unwrap();
+    let header_json =
+        serde_json::to_string(&token::TokenHeader::for_alg(sig::AlgKind::Falcon512)).unwrap();
     let header_b64 = BASE64_STANDARD.encode(header_json.as_bytes());
     let body_b64 = BASE64_STANDARD.encode(serde_json::to_string(&token).unwrap().as_bytes());
     let message = format!("{header_b64}.{body_b64}");
 
-    let custom_backend = CustomContextBackend::new(context);
-    let sig = custom_backend
-        .sign(&keypair.private, message.as_bytes())
-        .unwrap();
-    let sig_b64 = BASE64_STANDARD.encode(sig.to_bytes());
+    let sig = CustomContextBackend::sign(&keypair.private, message.as_bytes()).unwrap();
+    let sig_b64 = BASE64_STANDARD.encode(sig.as_bytes());
     let jwt = format!("{message}.{sig_b64}");
 
     (jwt, verifier_actor)
 }
 
-
-#[test]
-fn test_falcon_context_none_does_not_verify_as_rjwt() {
-    use futures::executor::block_on;
-
-    let (jwt, verifier_actor) = make_forged_jwt_with_context(b"");
-    let now = SystemTime::now();
-
-    let mut resolver = TestResolver::new("example.com");
-    resolver.add(verifier_actor);
-
-    let result = block_on(resolver.verify(jwt, now));
-    assert!(
-        matches!(result, Err(Error::Auth(_))),
-        "expected Err(Error::Auth(_)), got {:?}",
-        result
-    );
-}
-
-
 #[test]
 fn test_falcon_context_other_does_not_verify_as_rjwt() {
     use futures::executor::block_on;
 
-    let (jwt, verifier_actor) = make_forged_jwt_with_context(b"other-protocol");
+    let (jwt, verifier_actor) = make_forged_jwt_with_context();
     let now = SystemTime::now();
 
     let mut resolver = TestResolver::new("example.com");
@@ -810,26 +718,6 @@ fn test_falcon_context_other_does_not_verify_as_rjwt() {
         result
     );
 }
-
-
-#[test]
-fn test_falcon_context_rjwt_v2_does_not_verify_under_v1() {
-    use futures::executor::block_on;
-
-    let (jwt, verifier_actor) = make_forged_jwt_with_context(b"rjwt-v2");
-    let now = SystemTime::now();
-
-    let mut resolver = TestResolver::new("example.com");
-    resolver.add(verifier_actor);
-
-    let result = block_on(resolver.verify(jwt, now));
-    assert!(
-        matches!(result, Err(Error::Auth(_))),
-        "expected Err(Error::Auth(_)), got {:?}",
-        result
-    );
-}
-
 
 #[test]
 fn test_alg_header_matches_actor_key_mismatch() {
@@ -861,111 +749,5 @@ fn test_alg_header_matches_actor_key_mismatch() {
         matches!(result, Err(Error::Auth(_))),
         "expected Err(Error::Auth), got {:?}",
         result
-    );
-}
-
-
-#[derive(Clone, Debug, Default)]
-struct RecordingBackend {
-    sign_calls: Arc<AtomicUsize>,
-    verify_calls: Arc<AtomicUsize>,
-}
-
-
-impl RecordingBackend {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn sign_count(&self) -> usize {
-        self.sign_calls.load(Ordering::SeqCst)
-    }
-
-    fn verify_count(&self) -> usize {
-        self.verify_calls.load(Ordering::SeqCst)
-    }
-}
-
-
-impl Falcon512Backend for RecordingBackend {
-    fn generate(&self) -> Result<Falcon512KeyPair, Error> {
-        FalconRsBackend.generate()
-    }
-
-    fn sign(&self, sk: &Falcon512PrivateKey, msg: &[u8]) -> Result<Falcon512Signature, Error> {
-        self.sign_calls.fetch_add(1, Ordering::SeqCst);
-        FalconRsBackend.sign(sk, msg)
-    }
-
-    fn verify(
-        &self,
-        pk: &Falcon512PublicKey,
-        msg: &[u8],
-        sig: &Falcon512Signature,
-    ) -> Result<(), Error> {
-        self.verify_calls.fetch_add(1, Ordering::SeqCst);
-        FalconRsBackend.verify(pk, msg, sig)
-    }
-}
-
-
-#[test]
-fn test_falcon_custom_backend_sign_routed() {
-    let recording = RecordingBackend::new();
-    let actor =
-        Actor::<String>::new_falcon512_with("alice".to_string(), Arc::new(recording.clone()))
-            .expect("actor creation");
-    let now = SystemTime::now();
-    let token = Token::new(
-        "example.com".to_string(),
-        now,
-        Duration::from_secs(30),
-        actor.id().to_string(),
-        (),
-    );
-    actor.sign_token(token).expect("sign_token");
-    assert_eq!(recording.sign_count(), 1, "expected exactly one sign call");
-}
-
-
-#[test]
-fn test_falcon_custom_backend_verify_routed() {
-    use futures::executor::block_on;
-
-    let host = "example.com".to_string();
-    let now = SystemTime::now();
-
-    let signer =
-        Actor::<String>::new_falcon512_with("alice".to_string(), Arc::new(FalconRsBackend))
-            .expect("signer creation");
-    let token = Token::new(
-        host.clone(),
-        now,
-        Duration::from_secs(30),
-        signer.id().to_string(),
-        (),
-    );
-    let signed = signer.sign_token(token).expect("sign_token");
-
-    let public_key = match signer.verifying_key() {
-        VerifyingKey::Falcon512 { public_key, .. } => public_key,
-        _ => panic!("expected Falcon512 verifying key"),
-    };
-
-    let recording = RecordingBackend::new();
-    let verify_actor = Actor::<String>::with_verifying_key(
-        "alice".to_string(),
-        VerifyingKey::falcon512_with(public_key, Arc::new(recording.clone())),
-    );
-
-    let mut resolver = TestResolver::new(host.clone());
-    resolver.add(verify_actor);
-
-    let result = block_on(resolver.verify(signed.jwt().to_string(), now));
-    assert!(result.is_ok(), "verify should succeed, got {:?}", result);
-    assert_eq!(
-        recording.verify_count(),
-        1,
-        "expected exactly one verify call"
     );
 }

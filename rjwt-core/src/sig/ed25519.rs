@@ -1,8 +1,8 @@
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH, SIGNATURE_LENGTH, Signer, Verifier};
 use rand::rngs::OsRng;
 
-use crate::error::Error;
 use super::AlgKind;
+use crate::error::Error;
 
 pub struct Ed25519SigningKey(ed25519_dalek::SigningKey);
 
