@@ -10,8 +10,6 @@ pub struct Ed25519VerifyingKey(ed25519_dalek::VerifyingKey);
 
 pub struct Ed25519Signature(ed25519_dalek::Signature);
 
-const ALGORITHM_NAME: &str = "Ed25519";
-
 impl Ed25519SigningKey {
     pub fn generate() -> Self {
         Self(ed25519_dalek::SigningKey::generate(&mut OsRng))

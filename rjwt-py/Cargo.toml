@@ -15,7 +15,8 @@ name = "rjwt"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-falcon = ["rjwt/default"]
+default = ["falcon"]
+falcon = ["rjwt/falcon"]
 
 [dependencies]
 rjwt = { version = "0.7" }
