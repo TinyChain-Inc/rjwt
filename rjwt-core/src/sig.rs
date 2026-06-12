@@ -56,7 +56,7 @@ enum SigningKeyTypes {
 }
 
 pub struct SigningKey {
-    inner: SigningKeyTypes,
+   inner: SigningKeyTypes
 }
 
 enum VerifyingKeyTypes {

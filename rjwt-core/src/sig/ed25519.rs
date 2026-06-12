@@ -49,7 +49,7 @@ impl Ed25519VerifyingKey {
         Ok(Self(ed25519_dalek::VerifyingKey::from_bytes(arr)?))
     }
 
-    pub fn to_bytes(&self) -> [u8; 32] {
+    pub fn to_bytes(&self) -> [u8; PUBLIC_KEY_LENGTH] {
         self.0.to_bytes()
     }
 

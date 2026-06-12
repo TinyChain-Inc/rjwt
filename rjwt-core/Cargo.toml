@@ -38,4 +38,4 @@ path = "examples/ed25519.rs"
 [[example]]
 name = "falcon"
 path = "examples/falcon.rs"
-required-features = ["falcon-rs"]
+required-features = ["falcon"]

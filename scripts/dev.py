@@ -157,6 +157,11 @@ def _venv_python(venv: Path) -> str:
 
 # ── Layer 2: actions ──────────────────────────────────────────────────────────
 
+EXAMPLES = (
+    str(EXAMPLES_DIR / "example.py"),
+    str(EXAMPLES_DIR / "falcon512.py")
+)
+
 def _uv_run(*args: str) -> None:
     subprocess.run(
         [_state.uv, "run", *args],
@@ -175,11 +180,13 @@ def build_module() -> None:
 
 
 def check_stubs() -> None:
-    _uv_run("mypy", str(EXAMPLES_DIR / "example.py"))
+    for e in EXAMPLES:
+        _uv_run("mypy", e)
 
 
-def run_example() -> None:
-    _uv_run("python", str(EXAMPLES_DIR / "example.py"))
+def run_examples() -> None:
+    for e in EXAMPLES:
+        _uv_run("python", e)
 
 
 def build_docs() -> None:
@@ -216,8 +223,8 @@ def check_wheel() -> None:
             check=True,
         )
 
-        _uv_run("mypy", "--python-executable", python, str(EXAMPLES_DIR / "example.py"))
-        subprocess.run([python, str(EXAMPLES_DIR / "example.py")], check=True)
+        check_stubs()
+        run_examples()
     finally:
         shutil.rmtree(CHECK_VENV, ignore_errors=True)
 
@@ -292,7 +299,7 @@ _STEP_FNS: dict[str, Callable[[], None]] = {
     "stubs":        build_stubs,
     "build":        build_module,
     "check-stubs":  check_stubs,
-    "example":      run_example,
+    "example":      run_examples,
     "docs":         build_docs,
     "wheel":        build_wheel,
     "check-wheel":  check_wheel,

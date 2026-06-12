@@ -5,7 +5,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
-use ::rjwt_core::{SignedToken, Token};
+use rjwt_core::{SignedToken, Token};
 
 use crate::claims::PyClaims;
 use crate::{A, C, H, py_to_claims, system_time_to_unix, unix_to_system_time};

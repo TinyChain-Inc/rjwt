@@ -14,6 +14,10 @@ categories = ["authentication", "web-programming"]
 name = "rjwt"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = ["falcon"]
+falcon = ["rjwt/falcon"]
+
 [dependencies]
 rjwt = { version = "0.7" }
 pyo3 = { version = "0.26", features = ["extension-module"] }

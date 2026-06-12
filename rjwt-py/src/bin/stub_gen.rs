@@ -1,5 +1,5 @@
-use rjwt::stub_info;
 use pyo3_stub_gen::Result;
+use rjwt::stub_info;
 
 fn main() -> Result<()> {
     let stub = stub_info()?;

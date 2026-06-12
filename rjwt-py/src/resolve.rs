@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
-use ::rjwt_core::{Actor, Error, Resolve};
+use rjwt_core::{Actor, Error, Resolve};
 
 use crate::actor::PyActor;
 use crate::token::PySignedToken;
