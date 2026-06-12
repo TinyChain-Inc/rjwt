@@ -4,7 +4,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
-use ::rjwt_core::{Actor, SigningKey, VerifyingKey};
+use rjwt_core::{Actor, AlgKind, Error, SigningKey, VerifyingKey};
 
 use crate::token::{PySignedToken, PyToken};
 use crate::{A, H, py_to_claims, to_py_err, unix_to_system_time};
@@ -19,7 +19,7 @@ pub(crate) struct PyActor(pub(crate) Actor<A>);
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyActor {
-    /// Create an Actor with a newly-generated keypair.
+    /// Create an Actor with a newly-generated Ed25519 keypair.
     #[new]
     fn new(id: &str) -> PyResult<Self> {
         let id = A::from_str(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
@@ -28,31 +28,34 @@ impl PyActor {
 
     /// Create an Actor from a 32-byte Ed25519 private key.
     #[staticmethod]
-    fn with_keypair(id: &str,
-        #[gen_stub(override_type(type_repr = "bytes"))]
-        private_key: &[u8]) -> PyResult<Self> {
+    fn with_keypair(
+        id: &str,
+        #[gen_stub(override_type(type_repr = "bytes"))] private_key: &[u8],
+    ) -> PyResult<Self> {
         let id = A::from_str(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let bytes: [u8; 32] = private_key
-            .try_into()
-            .map_err(|_| PyValueError::new_err("private key must be exactly 32 bytes"))?;
-        Ok(Self(Actor::with_keypair(
-            id,
-            SigningKey::from_bytes(&bytes),
-        )))
+        let key = SigningKey::from_bytes(AlgKind::Ed25519, private_key)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(Self(Actor::with_signing_key(id, key)))
     }
 
     /// Create an Actor from a 32-byte Ed25519 public key (verify-only, cannot sign).
     #[staticmethod]
-    fn with_public_key(id: &str, 
-        #[gen_stub(override_type(type_repr = "bytes"))]
-        public_key: &[u8]) -> PyResult<Self> {
+    fn with_public_key(
+        id: &str,
+        #[gen_stub(override_type(type_repr = "bytes"))] public_key: &[u8],
+    ) -> PyResult<Self> {
         let id = A::from_str(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let bytes: &[u8; 32] = public_key
-            .try_into()
-            .map_err(|_| PyValueError::new_err("public key must be exactly 32 bytes"))?;
-        let key = VerifyingKey::from_bytes(bytes)
-            .map_err(|e: ed25519_dalek::SignatureError| PyValueError::new_err(e.to_string()))?;
-        Ok(Self(Actor::with_public_key(id, key)))
+        let key = VerifyingKey::from_bytes(AlgKind::Ed25519, public_key)
+            .map_err(|e: Error| PyValueError::new_err(e.to_string()))?;
+        Ok(Self(Actor::with_verifying_key(id, key)))
+    }
+
+    #[cfg(feature = "falcon")]
+    #[staticmethod]
+    fn new_falcon512(id: &str) -> PyResult<Self> {
+        let id = A::from_str(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let actor = Actor::new_falcon512(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(Self(actor))
     }
 
     /// Return the actor identifier as a string
@@ -67,7 +70,7 @@ impl PyActor {
 
     /// Return the 32-byte Ed25519 public key.
     fn public_key_bytes(&self) -> Vec<u8> {
-        self.0.public_key().to_bytes().to_vec()
+        self.0.verifying_key().to_bytes().to_vec()
     }
 
     /// Sign a Token, returning a SignedToken.

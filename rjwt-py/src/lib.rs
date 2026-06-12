@@ -81,7 +81,7 @@ use pyo3::types::PyDict;
 use serde::{Deserialize, Serialize};
 use umask::Mode;
 
-use ::rjwt_core::Error;
+use rjwt_core::Error;
 
 /// Host identifier type: a typed URL / host address.
 pub(crate) type H = Link;

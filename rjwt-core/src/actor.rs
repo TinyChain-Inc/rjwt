@@ -2,12 +2,12 @@ use std::fmt;
 use std::time::SystemTime;
 
 use base64::prelude::*;
-use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
-use rand::rngs::OsRng;
 use serde::Serialize;
 
+use crate::AlgKind;
 use crate::claims::Claims;
 use crate::error::Error;
+use crate::sig::{SigningKey, VerifyingKey};
 use crate::token::{SignedToken, Token, TokenHeader};
 
 enum Key {
@@ -29,7 +29,7 @@ impl Key {
 /// *IMPORTANT NOTE*: for security reasons, although `Actor` implements `Clone`, its secret key will
 /// NOT be cloned. For example:
 /// ```
-/// # use rjwt::Actor;
+/// # use rjwt_core::Actor;
 /// let actor = Actor::<String>::new("id".to_string()); // this has a new secret key
 /// let cloned = actor.clone(); // this does NOT have a secret key, only a public key
 /// ```
@@ -39,24 +39,52 @@ pub struct Actor<A> {
 }
 
 impl<A> Actor<A> {
-    /// Return an `Actor` with a newly-generated keypair.
-    pub fn new(id: A) -> Self {
-        Self::with_keypair(id, SigningKey::generate(&mut OsRng))
-    }
-
-    /// Return an `Actor` with the given keypair, or an error if the keypair is invalid.
-    pub fn with_keypair(id: A, keypair: SigningKey) -> Self {
-        Self {
-            id,
-            key: Key::Private(keypair),
+    /// Return an `Actor` with a newly-generated Ed25519 keypair.
+    pub fn new2(id: A, alg: AlgKind) -> Result<Self, Error> {
+        match alg {
+            AlgKind::Ed25519 => Ok(Self {
+                id,
+                key: Key::Private(SigningKey::generate_ed25519()),
+            }),
+            #[cfg(feature = "falcon")]
+            AlgKind::Falcon512 => Ok(Self {
+                id,
+                key: Key::Private(SigningKey::generate_falcon512()?),
+            }),
         }
     }
 
-    /// Return an `Actor` with the given public key, or an error if the key is invalid.
-    pub fn with_public_key(id: A, public_key: VerifyingKey) -> Self {
+    /// Return an `Actor` with a newly-generated Ed25519 keypair.
+    pub fn new(id: A) -> Self {
         Self {
             id,
-            key: Key::Public(public_key),
+            key: Key::Private(SigningKey::generate_ed25519()),
+        }
+    }
+
+    /// Return an `Actor` with a newly-generated Falcon-512 keypair.
+    #[cfg(feature = "falcon")]
+    pub fn new_falcon512(id: A) -> Result<Self, Error> {
+        let signing_key = SigningKey::generate_falcon512()?;
+        Ok(Self {
+            id,
+            key: Key::Private(signing_key),
+        })
+    }
+
+    /// Return an `Actor` with the given signing key.
+    pub fn with_signing_key(id: A, sk: SigningKey) -> Self {
+        Self {
+            id,
+            key: Key::Private(sk),
+        }
+    }
+
+    /// Return an `Actor` with the given verifying key (public only, cannot sign).
+    pub fn with_verifying_key(id: A, vk: VerifyingKey) -> Self {
+        Self {
+            id,
+            key: Key::Public(vk),
         }
     }
 
@@ -70,11 +98,11 @@ impl<A> Actor<A> {
         self.key.has_private_key()
     }
 
-    /// Borrow the public key of this actor, which a client can use to verify a signature.
-    pub fn public_key(&self) -> VerifyingKey {
+    /// Return the verifying key of this actor, which a client can use to verify a signature.
+    pub fn verifying_key(&self) -> VerifyingKey {
         match &self.key {
-            Key::Public(public_key) => *public_key,
-            Key::Private(keypair) => keypair.verifying_key(),
+            Key::Public(vk) => vk.clone(),
+            Key::Private(sk) => sk.verifying_key(),
         }
     }
 
@@ -84,15 +112,16 @@ impl<A> Actor<A> {
         A: Serialize,
         C: Serialize,
     {
-        let keypair = match &self.key {
-            Key::Private(keypair) => Ok(keypair),
+        let sk = match &self.key {
+            Key::Private(sk) => Ok(sk),
             Key::Public(_) => Err(Error::auth("cannot sign a token without a private key")),
         }?;
 
-        let header = BASE64_STANDARD.encode(serde_json::to_string(&TokenHeader::default())?);
+        let header =
+            BASE64_STANDARD.encode(serde_json::to_string(&TokenHeader::for_alg(sk.alg()))?);
         let claims = BASE64_STANDARD.encode(serde_json::to_string(&token)?);
 
-        let signature = keypair.try_sign(format!("{header}.{claims}").as_bytes())?;
+        let signature = sk.sign(format!("{header}.{claims}").as_bytes())?;
         let signature = BASE64_STANDARD.encode(signature.to_bytes());
 
         Ok(format!("{header}.{claims}.{signature}"))
@@ -133,10 +162,7 @@ impl<A: Clone> Clone for Actor<A> {
     fn clone(&self) -> Self {
         Actor {
             id: self.id.clone(),
-            key: match &self.key {
-                Key::Public(public_key) => Key::Public(*public_key),
-                Key::Private(keypair) => Key::Public(keypair.verifying_key()),
-            },
+            key: Key::Public(self.verifying_key()),
         }
     }
 }
