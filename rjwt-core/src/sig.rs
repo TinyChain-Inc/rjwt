@@ -50,7 +50,7 @@ impl AlgKind {
 }
 
 enum SigningKeyTypes {
-    Ed25519(ed25519::Ed25519SigningKey),
+    Ed25519(Box<ed25519::Ed25519SigningKey>),
     #[cfg(feature = "falcon")]
     Falcon512(falcon::Falcon512KeyPair),
 }
@@ -90,7 +90,7 @@ impl SigningKey {
 
     pub fn generate_ed25519() -> Self {
         Self {
-            inner: SigningKeyTypes::Ed25519(ed25519::Ed25519SigningKey::generate()),
+            inner: SigningKeyTypes::Ed25519(Box::new(ed25519::Ed25519SigningKey::generate())),
         }
     }
 
@@ -124,7 +124,7 @@ impl SigningKey {
     pub fn from_bytes(alg: AlgKind, bytes: &[u8]) -> Result<Self, Error> {
         match alg {
             AlgKind::Ed25519 => Ok(Self {
-                inner: SigningKeyTypes::Ed25519(ed25519::Ed25519SigningKey::from_bytes(bytes)?),
+                inner: SigningKeyTypes::Ed25519(Box::new(ed25519::Ed25519SigningKey::from_bytes(bytes)?)),
             }),
             #[cfg(feature = "falcon")]
             AlgKind::Falcon512 => Ok(Self {
