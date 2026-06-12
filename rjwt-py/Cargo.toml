@@ -1,6 +1,6 @@
 [package]
 name = "rjwt-py"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["code@tinychain.net"]
 description = "Python bindings for rjwt crate"
@@ -19,7 +19,7 @@ default = ["falcon"]
 falcon = ["rjwt/falcon"]
 
 [dependencies]
-rjwt = { version = "0.7" }
+rjwt = { version = "0.8" }
 pyo3 = { version = "0.26", features = ["extension-module"] }
 pyo3-stub-gen = "0.22"
 pyo3-stub-gen-derive = "0.22"
