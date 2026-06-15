@@ -34,6 +34,10 @@ impl Ed25519SigningKey {
     pub fn sign(&self, msg: &[u8]) -> Result<Ed25519Signature, Error> {
         Ok(Ed25519Signature(self.0.try_sign(msg)?))
     }
+
+    pub fn to_bytes(&self) -> [u8; SECRET_KEY_LENGTH] {
+        self.0.to_bytes()
+    }
 }
 
 impl Ed25519VerifyingKey {

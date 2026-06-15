@@ -124,12 +124,22 @@ impl SigningKey {
     pub fn from_bytes(alg: AlgKind, bytes: &[u8]) -> Result<Self, Error> {
         match alg {
             AlgKind::Ed25519 => Ok(Self {
-                inner: SigningKeyTypes::Ed25519(Box::new(ed25519::Ed25519SigningKey::from_bytes(bytes)?)),
+                inner: SigningKeyTypes::Ed25519(Box::new(ed25519::Ed25519SigningKey::from_bytes(
+                    bytes,
+                )?)),
             }),
             #[cfg(feature = "falcon")]
             AlgKind::Falcon512 => Ok(Self {
                 inner: SigningKeyTypes::Falcon512(FalconBackend::from_bytes(bytes)?),
             }),
+        }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        match &self.inner {
+            SigningKeyTypes::Ed25519(k) => k.to_bytes().to_vec(),
+            #[cfg(feature = "falcon")]
+            SigningKeyTypes::Falcon512(kp) => kp.private.as_bytes().to_vec(),
         }
     }
 }

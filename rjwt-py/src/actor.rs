@@ -9,7 +9,17 @@ use rjwt_core::{Actor, AlgKind, Error, SigningKey, VerifyingKey};
 use crate::token::{PySignedToken, PyToken};
 use crate::{A, H, py_to_claims, to_py_err, unix_to_system_time};
 
-/// An actor with an [`hr_id::Id`] identifier and an ECDSA keypair used to sign tokens.
+fn parse_alg(alg: Option<&str>) -> PyResult<AlgKind> {
+    match alg.unwrap_or("falcon512").to_ascii_lowercase().as_str() {
+        "falcon512" | "falcon-512" | "fn-dsa-512" => Ok(AlgKind::Falcon512),
+        "ed25519" | "eddsa" => Ok(AlgKind::Ed25519),
+        other => Err(PyValueError::new_err(format!(
+            "unsupported signature algorithm: {other}"
+        ))),
+    }
+}
+
+/// An actor with an [`hr_id::Id`] identifier and an rjwt signing keypair used to sign tokens.
 ///
 /// Cloning an Actor strips the private key — the clone holds only the public key.
 #[gen_stub_pyclass]
@@ -19,33 +29,37 @@ pub(crate) struct PyActor(pub(crate) Actor<A>);
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyActor {
-    /// Create an Actor with a newly-generated Ed25519 keypair.
+    /// Create an Actor with a newly-generated signing keypair.
     #[new]
     fn new(id: &str) -> PyResult<Self> {
         let id = A::from_str(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
         Ok(Self(Actor::new(id)))
     }
 
-    /// Create an Actor from a 32-byte Ed25519 private key.
+    /// Create an Actor from private-key bytes.
     #[staticmethod]
     fn with_keypair(
         id: &str,
         #[gen_stub(override_type(type_repr = "bytes"))] private_key: &[u8],
+        alg: Option<&str>,
     ) -> PyResult<Self> {
         let id = A::from_str(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let key = SigningKey::from_bytes(AlgKind::Ed25519, private_key)
+        let alg = parse_alg(alg)?;
+        let key = SigningKey::from_bytes(alg, private_key)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
         Ok(Self(Actor::with_signing_key(id, key)))
     }
 
-    /// Create an Actor from a 32-byte Ed25519 public key (verify-only, cannot sign).
+    /// Create an Actor from public-key bytes (verify-only, cannot sign).
     #[staticmethod]
     fn with_public_key(
         id: &str,
         #[gen_stub(override_type(type_repr = "bytes"))] public_key: &[u8],
+        alg: Option<&str>,
     ) -> PyResult<Self> {
         let id = A::from_str(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let key = VerifyingKey::from_bytes(AlgKind::Ed25519, public_key)
+        let alg = parse_alg(alg)?;
+        let key = VerifyingKey::from_bytes(alg, public_key)
             .map_err(|e: Error| PyValueError::new_err(e.to_string()))?;
         Ok(Self(Actor::with_verifying_key(id, key)))
     }
@@ -68,9 +82,16 @@ impl PyActor {
         self.0.has_private_key()
     }
 
-    /// Return the 32-byte Ed25519 public key.
+    /// Return public-key bytes.
     fn public_key_bytes(&self) -> Vec<u8> {
         self.0.verifying_key().to_bytes().to_vec()
+    }
+
+    /// Return private-key bytes.
+    fn private_key_bytes(&self) -> PyResult<Vec<u8>> {
+        self.0
+            .signing_key_bytes()
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     /// Sign a Token, returning a SignedToken.

@@ -24,7 +24,7 @@ impl Key {
     }
 }
 
-/// An actor with an identifier of type `T` and an ECDSA keypair used to sign tokens.
+/// An actor with an identifier of type `T` and an rjwt signing keypair used to sign tokens.
 ///
 /// *IMPORTANT NOTE*: for security reasons, although `Actor` implements `Clone`, its secret key will
 /// NOT be cloned. For example:
@@ -39,7 +39,7 @@ pub struct Actor<A> {
 }
 
 impl<A> Actor<A> {
-    /// Return an `Actor` with a newly-generated Ed25519 keypair.
+    /// Return an `Actor` with a newly-generated signing keypair.
     pub fn new2(id: A, alg: AlgKind) -> Result<Self, Error> {
         match alg {
             AlgKind::Ed25519 => Ok(Self {
@@ -54,7 +54,7 @@ impl<A> Actor<A> {
         }
     }
 
-    /// Return an `Actor` with a newly-generated Ed25519 keypair.
+    /// Return an `Actor` with a newly-generated signing keypair.
     pub fn new(id: A) -> Self {
         Self {
             id,
@@ -103,6 +103,13 @@ impl<A> Actor<A> {
         match &self.key {
             Key::Public(vk) => vk.clone(),
             Key::Private(sk) => sk.verifying_key(),
+        }
+    }
+
+    pub fn signing_key_bytes(&self) -> Result<Vec<u8>, Error> {
+        match &self.key {
+            Key::Public(_) => Err(Error::auth("actor does not have a private key")),
+            Key::Private(sk) => Ok(sk.to_bytes()),
         }
     }
 
