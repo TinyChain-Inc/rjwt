@@ -74,17 +74,15 @@ impl Resolve for TestResolver {
     type ActorId = String;
     type Claims = ();
 
-    fn resolve(
+    async fn resolve(
         &self,
         host: &Self::HostId,
         actor_id: &Self::ActorId,
-    ) -> impl std::future::Future<Output = Result<Actor<Self::ActorId>, Error>> + Send {
-        let result = self
-            .actors
+    ) -> Result<Actor<Self::ActorId>, Error> {
+        self.actors
             .get(&(host.clone(), actor_id.clone()))
             .cloned()
-            .ok_or_else(|| Error::fetch(format!("{}:{}", host, actor_id)));
-        async move { result }
+            .ok_or_else(|| Error::fetch(format!("{}:{}", host, actor_id)))
     }
 }
 
@@ -369,12 +367,12 @@ fn test_pre_pass_fails_before_resolver_invoked() {
         type ActorId = String;
         type Claims = ();
 
-        fn resolve(
+        async fn resolve(
             &self,
             _host: &Self::HostId,
             _actor_id: &Self::ActorId,
-        ) -> impl std::future::Future<Output = Result<Actor<Self::ActorId>, Error>> + Send {
-            async { panic!("resolver must not be called for mixed-alg chains") }
+        ) -> Result<Actor<Self::ActorId>, Error> {
+            panic!("resolver must not be called for mixed-alg chains")
         }
     }
 
@@ -536,13 +534,12 @@ fn test_falcon_actor_id_mismatch_rejected() {
         type ActorId = String;
         type Claims = ();
 
-        fn resolve(
+        async fn resolve(
             &self,
             _host: &Self::HostId,
             _actor_id: &Self::ActorId,
-        ) -> impl std::future::Future<Output = Result<Actor<Self::ActorId>, Error>> + Send {
-            let actor = self.actor.clone();
-            async move { Ok(actor) }
+        ) -> Result<Actor<Self::ActorId>, Error> {
+            Ok(self.actor.clone())
         }
     }
 
