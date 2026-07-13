@@ -53,6 +53,7 @@ BUILD_VENV = TARGET_DIR / "build_venv"
 CHECK_VENV = TARGET_DIR / "check_venv"
 
 _UV_PROJECT_ENVIRONMENT = "UV_PROJECT_ENVIRONMENT"
+_LOCAL_DEPS_ENV = "RJWT_LOCAL_DEPS"
 
 # ── Runtime state (populated in main() before any action is called) ───────────
 
@@ -119,6 +120,7 @@ def ensure_uv() -> None:
 def setup_build_venv() -> None:
     BUILD_VENV.parent.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
+    _configure_local_cargo_overrides(env)
     env[_UV_PROJECT_ENVIRONMENT] = str(BUILD_VENV)
     subprocess.run(
         [_state.uv, "sync", "--group", "build", "--group", "docs"],
@@ -142,6 +144,53 @@ def init_env() -> None:
         _state.env["RUSTFLAGS"] = (
             existing + " -C link-arg=-undefined -C link-arg=dynamic_lookup"
         ).strip()
+
+    _configure_local_cargo_overrides(_state.env)
+
+
+def _configure_local_cargo_overrides(env: dict[str, str]) -> None:
+    """Patch crates.io deps to local siblings when available.
+
+    This keeps standalone GitHub CI deterministic (published deps) while making
+    local managed-dependency development use workspace siblings automatically.
+    Set RJWT_LOCAL_DEPS=0 to disable local overrides explicitly.
+    """
+
+    if os.environ.get(_LOCAL_DEPS_ENV, "1").strip().lower() in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }:
+        return
+
+    overrides: dict[str, Path] = {}
+    candidates = {
+        "hr-id": REPO_ROOT.parent / "hr-id",
+        "pathlink": REPO_ROOT.parent / "pathlink",
+    }
+
+    for crate, path in candidates.items():
+        if (path / "Cargo.toml").exists():
+            overrides[crate] = path
+
+    if not overrides:
+        return
+
+    cargo_home = TARGET_DIR / "cargo-home"
+    cargo_home.mkdir(parents=True, exist_ok=True)
+    config_path = cargo_home / "config.toml"
+
+    lines = ["[patch.crates-io]"]
+    for crate, path in sorted(overrides.items()):
+        lines.append(f'{crate} = {{ path = "{path.as_posix()}" }}')
+    config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    env["CARGO_HOME"] = str(cargo_home)
+    print(
+        "Using local cargo dependency overrides:",
+        ", ".join(f"{crate} -> {path}" for crate, path in sorted(overrides.items())),
+    )
 
 
 def _venv_bin(venv: Path) -> Path:
@@ -236,6 +285,7 @@ def cargo_matrix() -> None:
     --features falcon} must compile and test cleanly under -D warnings.
     """
     env = os.environ.copy()
+    _configure_local_cargo_overrides(env)
     rustflags = env.get("RUSTFLAGS", "")
     env["RUSTFLAGS"] = (rustflags + " -D warnings").strip()
 

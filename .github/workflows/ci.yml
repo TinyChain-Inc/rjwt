@@ -27,4 +27,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Run CI pipeline
+        env:
+          RJWT_LOCAL_DEPS: "0"
         run: python3 scripts/dev.py ci

@@ -3,7 +3,7 @@ name = "rjwt"
 version = "0.8.0"
 edition = "2024"
 authors = ["code@tinychain.net"]
-description = "A recursive Javascript Web Token with support for ECDSA"
+description = "A recursive Javascript Web Token with support for Falcon"
 license = "Apache-2.0"
 repository = "https://github.com/haydnv/rjwt.git"
 
