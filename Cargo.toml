@@ -1,7 +1,14 @@
 [workspace]
-members = ["rjwt-core", "rjwt-py"]
+members = [
+	"rjwt-core",
+	"rjwt-py",
+]
 resolver = "2"
 
+[workspace.dependencies]
+rjwt = { path = "./rjwt-core", version = "0.8" }
+hr-id = { version = "0.7", features = ["serde"] }
+pathlink = { version = "0.5", features = ["serialize"] }
 
 [patch.crates-io]
-rjwt     = { path = "./rjwt-core" }
+rjwt = { path = "./rjwt-core" }
