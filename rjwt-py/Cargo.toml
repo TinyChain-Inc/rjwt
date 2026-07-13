@@ -26,7 +26,7 @@ pyo3-stub-gen-derive = "0.22"
 pyo3-async-runtimes = { version = "0.26", features = ["tokio-runtime"] }
 tokio = { version = "1", features = ["full"] }
 ed25519-dalek = "2.1"
-hr-id = { version = "0.7", features = ["serde"] }
-pathlink = { version = "0.5", features = ["serialize"] }
+hr-id = { path = "../../hr-id", version = "0.7", features = ["serde"] }
+pathlink = { path = "../../pathlink", version = "0.5", features = ["serialize"] }
 umask = "2.1"
 serde = { version = "1", features = ["derive"] }
