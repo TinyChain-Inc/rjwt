@@ -120,6 +120,7 @@ def ensure_uv() -> None:
 def setup_build_venv() -> None:
     BUILD_VENV.parent.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
+    _configure_local_cargo_overrides(env)
     env[_UV_PROJECT_ENVIRONMENT] = str(BUILD_VENV)
     subprocess.run(
         [_state.uv, "sync", "--group", "build", "--group", "docs"],
