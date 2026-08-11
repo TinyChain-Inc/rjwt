@@ -3,7 +3,6 @@ use std::sync::Arc;
 use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
-
 use rjwt_core::{Actor, Error, Resolve};
 
 use crate::actor::PyActor;
@@ -13,11 +12,6 @@ use crate::{A, C, H, to_py_err, unix_to_system_time};
 struct InnerResolver {
     py_obj: Py<PyAny>,
 }
-
-// SAFETY: Py<PyAny> is a reference-counted pointer; it is only dereferenced
-// while holding the GIL, which is enforced by the Python::attach calls below.
-unsafe impl Send for InnerResolver {}
-unsafe impl Sync for InnerResolver {}
 
 impl Resolve for InnerResolver {
     type HostId = H;
@@ -64,8 +58,9 @@ impl Resolve for InnerResolver {
     }
 }
 
-/// Wraps a Python object implementing ``async def resolve(host: str, actor_id: str) -> Actor``
-/// and exposes a ``verify`` coroutine that decodes and validates signed JWT strings.
+/// Wraps a Python object implementing ``async def resolve(host: str, actor_id:
+/// str) -> Actor`` and exposes a ``verify`` coroutine that decodes and
+/// validates signed JWT strings.
 ///
 /// The Python resolver is responsible for looking up actors by host and ID and
 /// returning an ``Actor`` constructed via ``Actor.with_public_key``.
@@ -85,10 +80,12 @@ impl PyResolver {
         }
     }
 
-    /// Decode and verify ``encoded`` as of ``now_unix`` (Unix timestamp, float seconds).
+    /// Decode and verify ``encoded`` as of ``now_unix`` (Unix timestamp, float
+    /// seconds).
     ///
-    /// Returns a coroutine that resolves to a ``SignedToken`` containing the full
-    /// claim chain. Raises ``RuntimeError`` if the token is invalid or expired.
+    /// Returns a coroutine that resolves to a ``SignedToken`` containing the
+    /// full claim chain. Raises ``RuntimeError`` if the token is invalid or
+    /// expired.
     fn verify<'py>(
         &self,
         py: Python<'py>,
