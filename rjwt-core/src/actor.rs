@@ -1,7 +1,7 @@
 use std::fmt;
 use std::time::SystemTime;
 
-use base64::prelude::*;
+use base64::{Engine as _, prelude::BASE64_STANDARD};
 use serde::Serialize;
 
 use crate::AlgKind;
@@ -30,7 +30,7 @@ impl Key {
 /// NOT be cloned. For example:
 /// ```
 /// # use rjwt_core::Actor;
-/// let actor = Actor::<String>::new("id".to_string()); // this has a new secret key
+/// let actor = Actor::<String>::new("id".to_string(), rjwt_core::AlgKind::Ed25519).unwrap(); // this has a new secret key
 /// let cloned = actor.clone(); // this does NOT have a secret key, only a public key
 /// ```
 pub struct Actor<A> {
@@ -39,8 +39,8 @@ pub struct Actor<A> {
 }
 
 impl<A> Actor<A> {
-    /// Return an `Actor` with a newly-generated signing keypair.
-    pub fn new2(id: A, alg: AlgKind) -> Result<Self, Error> {
+    /// Generate a keypair for `alg`. Pass [`crate::DEFAULT_ALGORITHM`] for the build default.
+    pub fn new(id: A, alg: AlgKind) -> Result<Self, Error> {
         match alg {
             AlgKind::Ed25519 => Ok(Self {
                 id,
@@ -52,24 +52,6 @@ impl<A> Actor<A> {
                 key: Key::Private(SigningKey::generate_falcon512()?),
             }),
         }
-    }
-
-    /// Return an `Actor` with a newly-generated signing keypair.
-    pub fn new(id: A) -> Self {
-        Self {
-            id,
-            key: Key::Private(SigningKey::generate_ed25519()),
-        }
-    }
-
-    /// Return an `Actor` with a newly-generated Falcon-512 keypair.
-    #[cfg(feature = "falcon")]
-    pub fn new_falcon512(id: A) -> Result<Self, Error> {
-        let signing_key = SigningKey::generate_falcon512()?;
-        Ok(Self {
-            id,
-            key: Key::Private(signing_key),
-        })
     }
 
     /// Return an `Actor` with the given signing key.
@@ -103,6 +85,17 @@ impl<A> Actor<A> {
         match &self.key {
             Key::Public(vk) => vk.clone(),
             Key::Private(sk) => sk.verifying_key(),
+        }
+    }
+
+    pub(crate) fn verify(
+        &self,
+        message: &[u8],
+        signature: &crate::sig::Signature,
+    ) -> Result<(), Error> {
+        match &self.key {
+            Key::Public(key) => key.verify(message, signature),
+            Key::Private(key) => key.verifying_key().verify(message, signature),
         }
     }
 
@@ -142,7 +135,7 @@ impl<A> Actor<A> {
         C: Serialize,
     {
         let jwt = self.sign_token_inner(&token)?;
-        let claims = Claims::new(token.exp, token.iss, token.actor_id, token.custom);
+        let claims = Claims::new(token.exp, token.iss, token.actor_id, token.custom)?;
         Ok(SignedToken::new(claims, jwt))
     }
 

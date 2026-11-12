@@ -6,7 +6,7 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-rjwt = { path = "./rjwt-core", version = "0.8" }
+rjwt = { path = "./rjwt-core", version = "0.8", default-features = false }
 hr-id = { version = "0.7", features = ["serde"] }
 pathlink = { version = "0.5", features = ["serialize"] }
 

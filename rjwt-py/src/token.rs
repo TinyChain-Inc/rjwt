@@ -4,7 +4,6 @@ use std::time::Duration;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
-
 use rjwt_core::{SignedToken, Token};
 
 use crate::claims::PyClaims;
@@ -37,9 +36,12 @@ impl PyToken {
         let iss = H::from_str(iss).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let actor_id = A::from_str(actor_id).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let claims = py_to_claims(claims)?;
-        let iat = unix_to_system_time(iat_unix);
-        let ttl = Duration::from_secs_f64(ttl_secs);
-        Ok(Self(Token::new(iss, iat, ttl, actor_id, claims)))
+        let iat = unix_to_system_time(iat_unix)?;
+        let ttl = Duration::try_from_secs_f64(ttl_secs)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self(
+            Token::new(iss, iat, ttl, actor_id, claims).map_err(crate::to_py_err)?,
+        ))
     }
 
     /// Return the issuing host as a string.
@@ -53,8 +55,8 @@ impl PyToken {
     }
 
     /// Return true if token is expired
-    fn is_expired(&self, now_unix: f64) -> bool {
-        self.0.is_expired(unix_to_system_time(now_unix))
+    fn is_expired(&self, now_unix: f64) -> PyResult<bool> {
+        Ok(self.0.is_expired(unix_to_system_time(now_unix)?))
     }
 }
 
@@ -82,6 +84,6 @@ impl PySignedToken {
     }
 
     fn __repr__(&self) -> String {
-        format!("SignedToken(jwt={:?})", self.0.jwt())
+        format!("{:?}", self.0)
     }
 }

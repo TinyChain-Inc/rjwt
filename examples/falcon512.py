@@ -31,10 +31,10 @@ class ExampleResolver:
 async def main() -> None:
     now = time.time()
 
-    bob = rjwt.Actor.new_falcon512("bob")
+    bob = rjwt.Actor("bob", alg="falcon512")
     example = ExampleResolver("http://example.com/", {"bob": bob})
 
-    app = rjwt.Actor.new_falcon512("app")
+    app = rjwt.Actor("app", alg="falcon512")
     retailer = ExampleResolver("http://retailer.com/", {"app": app}, peers=[example])
 
     bobs_claims = {"/home/bob": 0o755, "/tmp": 0o777}

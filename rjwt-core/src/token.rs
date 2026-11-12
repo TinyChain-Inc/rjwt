@@ -1,9 +1,8 @@
 use std::fmt;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use base64::prelude::*;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use base64::{Engine as _, prelude::BASE64_STANDARD};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::claims::Claims;
 use crate::error::Error;
@@ -37,18 +36,28 @@ pub struct Token<H, A, C> {
 
 impl<H, A, C> Token<H, A, C> {
     /// Create a new (unsigned) token.
-    pub fn new(iss: H, iat: SystemTime, ttl: Duration, actor_id: A, claims: C) -> Self {
-        let iat = iat.duration_since(UNIX_EPOCH).expect("duration");
-        let exp = iat + ttl;
+    /// Reject timestamps before the Unix epoch and expiry outside the system clock.
+    pub fn new(
+        iss: H,
+        iat: SystemTime,
+        ttl: Duration,
+        actor_id: A,
+        claims: C,
+    ) -> Result<Self, Error> {
+        let exp = iat
+            .checked_add(ttl)
+            .ok_or_else(|| Error::Time("token expiry exceeds system time range".into()))?;
+        let iat = iat.duration_since(UNIX_EPOCH)?;
+        let exp = exp.duration_since(UNIX_EPOCH)?;
 
-        Self {
+        Ok(Self {
             iss,
             iat: iat.as_secs(),
             exp: exp.as_secs(),
             actor_id,
             custom: claims,
             inherit: None,
-        }
+        })
     }
 
     pub(crate) fn consume(
@@ -75,7 +84,9 @@ impl<H, A, C> Token<H, A, C> {
             inherit: Some(parent.jwt),
         };
 
-        let claims = parent.claims.consume(host_id, actor_id, claims)?;
+        let claims = parent
+            .claims
+            .consume(exp.as_secs(), host_id, actor_id, claims)?;
 
         Ok((token, claims))
     }
@@ -92,9 +103,10 @@ impl<H, A, C> Token<H, A, C> {
 
     /// Return `true` if this token is expired (or not yet issued) at the given moment.
     pub fn is_expired(&self, now: SystemTime) -> bool {
-        let iat = UNIX_EPOCH + Duration::from_secs(self.iat);
-        let exp = UNIX_EPOCH + Duration::from_secs(self.exp);
-        now < iat || now >= exp
+        match now.duration_since(UNIX_EPOCH) {
+            Ok(now) => now < Duration::from_secs(self.iat) || now >= Duration::from_secs(self.exp),
+            Err(_) => true,
+        }
     }
 }
 
@@ -143,7 +155,7 @@ impl<H, A, C> SignedToken<H, A, C> {
 
 impl<H: fmt::Debug, A: fmt::Debug, C: fmt::Debug> fmt::Debug for SignedToken<H, A, C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "JWT {} which claims {:?}", self.jwt, self.claims)
+        f.debug_struct("SignedToken").finish_non_exhaustive()
     }
 }
 
@@ -154,7 +166,7 @@ pub(crate) fn token_signature(encoded: &str, alg: AlgKind) -> Result<(&str, Sign
 
     let i = encoded
         .rfind('.')
-        .ok_or_else(|| Error::format(format!("invalid token: {}", encoded)))?;
+        .ok_or_else(|| Error::format("invalid token structure"))?;
 
     let message = &encoded[..i];
 
@@ -172,7 +184,7 @@ pub(crate) fn token_signature(encoded: &str, alg: AlgKind) -> Result<(&str, Sign
 pub(crate) fn decode_header_and_inherit(encoded: &str) -> Result<(AlgKind, Option<String>), Error> {
     let i = encoded
         .find('.')
-        .ok_or_else(|| Error::format(format!("invalid token: {}", encoded)))?;
+        .ok_or_else(|| Error::format("invalid token structure"))?;
 
     let header_bytes = BASE64_STANDARD.decode(&encoded[..i])?;
     let header: TokenHeader =
@@ -193,7 +205,7 @@ pub(crate) fn decode_header_and_inherit(encoded: &str) -> Result<(AlgKind, Optio
     let body_part = &encoded[(i + 1)..];
     let dot = body_part
         .find('.')
-        .ok_or_else(|| Error::format(format!("invalid token: {}", encoded)))?;
+        .ok_or_else(|| Error::format("invalid token structure"))?;
 
     let body_bytes = BASE64_STANDARD.decode(&body_part[..dot])?;
     let body: serde_json::Value = serde_json::from_slice(&body_bytes)?;
@@ -214,7 +226,7 @@ where
 {
     let i = encoded
         .find('.')
-        .ok_or_else(|| Error::format(format!("invalid token: {}", encoded)))?;
+        .ok_or_else(|| Error::format("invalid token structure"))?;
 
     let header_bytes = BASE64_STANDARD.decode(&encoded[..i])?;
     let header: TokenHeader =
@@ -235,10 +247,18 @@ where
     let body_part = &encoded[(i + 1)..];
     let dot = body_part
         .find('.')
-        .ok_or_else(|| Error::format(format!("invalid token: {}", encoded)))?;
+        .ok_or_else(|| Error::format("invalid token structure"))?;
 
     let token_bytes = BASE64_STANDARD.decode(&body_part[..dot])?;
     let token = serde_json::from_slice(&token_bytes)?;
 
     Ok((alg, token))
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/token_time.rs"]
+mod time_tests;
+
+#[cfg(test)]
+#[path = "../tests/unit/token_diagnostics.rs"]
+mod diagnostic_tests;

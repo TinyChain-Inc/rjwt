@@ -27,6 +27,7 @@ impl Resolve for InnerResolver {
         // are no borrows of `self` inside the future.
         let host_str = host.to_string();
         let actor_str = actor_id.to_string();
+
         // clone_ref increments the CPython refcount; requires the GIL.
         let py_obj = Python::attach(|py| self.py_obj.clone_ref(py));
 
@@ -92,7 +93,7 @@ impl PyResolver {
         encoded: String,
         now_unix: f64,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let now = unix_to_system_time(now_unix);
+        let now = unix_to_system_time(now_unix)?;
         // Arc::clone gives the async block an owned handle so the future is 'static.
         let inner = Arc::clone(&self.inner);
 

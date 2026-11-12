@@ -13,21 +13,28 @@ pub struct Claims<H, A, C> {
 }
 
 impl<H, A, C> Claims<H, A, C> {
-    pub(crate) fn new(exp: u64, host: H, actor_id: A, claims: C) -> Self {
-        Self {
+    pub(crate) fn new(exp: u64, host: H, actor_id: A, claims: C) -> Result<Self, Error> {
+        UNIX_EPOCH
+            .checked_add(Duration::from_secs(exp))
+            .ok_or_else(|| Error::Time("token expiry exceeds system time range".into()))?;
+        Ok(Self {
             exp,
             host,
             actor_id,
             claims,
             inherit: None,
-        }
+        })
     }
 
-    pub(crate) fn consume(self, host: H, actor_id: A, claims: C) -> Result<Self, Error> {
-        let exp = self.expires().duration_since(UNIX_EPOCH)?;
+    pub(crate) fn consume(self, exp: u64, host: H, actor_id: A, claims: C) -> Result<Self, Error> {
+        if exp > self.exp {
+            return Err(Error::Time(
+                "cannot extend the expiration time of a recursive token".into(),
+            ));
+        }
 
         Ok(Self {
-            exp: exp.as_secs(),
+            exp,
             host,
             actor_id,
             claims,
