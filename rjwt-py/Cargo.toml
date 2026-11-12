@@ -5,7 +5,7 @@ edition = "2024"
 authors = ["code@tinychain.net"]
 description = "Python bindings for rjwt crate"
 license = "Apache-2.0"
-repository = "https://github.com/haydnv/rjwt.git"
+repository = "https://github.com/TinyChain-Inc/rjwt.git"
 
 keywords = ["jwt", "recursive", "oauth", "token", "scope"]
 categories = ["authentication", "web-programming"]

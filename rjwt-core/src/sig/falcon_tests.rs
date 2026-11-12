@@ -87,13 +87,13 @@ impl Resolve for TestResolver {
 }
 
 fn falcon_actor(id: &str) -> Actor<String> {
-    Actor::<String>::new_falcon512(id.to_string()).expect("falcon actor")
+    Actor::<String>::new(id.to_string(), crate::AlgKind::Falcon512).expect("falcon actor")
 }
 
 #[test]
-fn test_falcon_new_falcon512_default_constructor() {
+fn test_falcon_actor_constructor() {
     let id = "test-actor".to_string();
-    let actor = Actor::<String>::new_falcon512(id);
+    let actor = Actor::<String>::new(id, crate::AlgKind::Falcon512);
     assert!(actor.is_ok());
     let actor = actor.unwrap();
     let token = Token::new(
@@ -102,7 +102,8 @@ fn test_falcon_new_falcon512_default_constructor() {
         Duration::from_secs(30),
         actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed = actor.sign_token(token).unwrap();
     let (alg, _) = token::decode_token::<String, String, ()>(signed.jwt()).unwrap();
     assert_eq!(alg, AlgKind::Falcon512);
@@ -117,7 +118,8 @@ fn test_falcon_sign_verify_roundtrip() {
         Duration::from_secs(30),
         actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed = actor.sign_token(token).unwrap();
     let (alg, _) = token::decode_token::<String, String, ()>(signed.jwt()).unwrap();
     assert_eq!(alg, AlgKind::Falcon512);
@@ -139,7 +141,8 @@ fn test_falcon_depth1_under_8kb() {
         Duration::from_secs(30),
         actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed = actor.sign_token(token).unwrap();
     assert!(
         signed.jwt().len() < 8000,
@@ -159,7 +162,8 @@ fn test_falcon_depth2_chain_under_8kb() {
         Duration::from_secs(30),
         root.id().to_string(),
         "root claim".to_string(),
-    );
+    )
+    .expect("valid token time");
     let signed_root = root.sign_token(token).unwrap();
     let signed_child = delegate
         .consume_and_sign(
@@ -186,14 +190,16 @@ fn test_falcon_signing_is_randomized() {
         Duration::from_secs(30),
         actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let token2 = Token::new(
         "example.com".to_string(),
         now,
         Duration::from_secs(30),
         actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed1 = actor.sign_token(token1).unwrap();
     let signed2 = actor.sign_token(token2).unwrap();
     let sig1 = signed1.jwt().rsplit('.').next().unwrap();
@@ -217,7 +223,8 @@ fn test_falcon_actor_clone_drops_private_key() {
         Duration::from_secs(30),
         actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed = actor.sign_token(token).unwrap();
     let (message, signature) = token::token_signature(signed.jwt(), AlgKind::Falcon512).unwrap();
     assert!(
@@ -230,14 +237,15 @@ fn test_falcon_actor_clone_drops_private_key() {
 
 #[test]
 fn test_falcon_signature_is_exactly_666_bytes() {
-    let actor = Actor::<String>::new_falcon512("a".to_string()).unwrap();
+    let actor = Actor::<String>::new("a".to_string(), crate::AlgKind::Falcon512).unwrap();
     let token = Token::new(
         "h".to_string(),
         SystemTime::now(),
         Duration::from_secs(30),
         actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed = actor.sign_token(token).unwrap();
     let (_, signature) = token::token_signature(signed.jwt(), AlgKind::Falcon512).unwrap();
     assert_eq!(signature.to_bytes().len(), 666);
@@ -257,7 +265,8 @@ fn test_decode_alg_fndsa512_dispatches_to_falcon() {
         Duration::from_secs(30),
         actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed = actor.sign_token(token).unwrap();
 
     let (alg, _) = token::decode_token::<String, String, ()>(signed.jwt()).unwrap();
@@ -280,7 +289,7 @@ fn test_chain_alg_mismatch_outer_eddsa_inner_falcon_rejected() {
 
     let now = SystemTime::now();
     let inner_actor = falcon_actor("inner");
-    let outer_actor = Actor::<String>::new("outer".to_string());
+    let outer_actor = Actor::<String>::new("outer".to_string(), crate::AlgKind::Ed25519).unwrap();
 
     let inner_token = Token::new(
         "inner.com".to_string(),
@@ -288,7 +297,8 @@ fn test_chain_alg_mismatch_outer_eddsa_inner_falcon_rejected() {
         Duration::from_secs(30),
         inner_actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed_inner = inner_actor.sign_token(inner_token).unwrap();
 
     let mut inner_resolver = TestResolver::new("inner.com");
@@ -320,7 +330,7 @@ fn test_chain_alg_mismatch_outer_falcon_inner_eddsa_rejected() {
     use futures::executor::block_on;
 
     let now = SystemTime::now();
-    let inner_actor = Actor::<String>::new("inner".to_string());
+    let inner_actor = Actor::<String>::new("inner".to_string(), crate::AlgKind::Ed25519).unwrap();
     let outer_actor = falcon_actor("outer");
 
     let inner_token = Token::new(
@@ -329,7 +339,8 @@ fn test_chain_alg_mismatch_outer_falcon_inner_eddsa_rejected() {
         Duration::from_secs(30),
         inner_actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed_inner = inner_actor.sign_token(inner_token).unwrap();
 
     let mut inner_resolver = TestResolver::new("inner.com");
@@ -378,7 +389,7 @@ fn test_pre_pass_fails_before_resolver_invoked() {
 
     let now = SystemTime::now();
     let inner_actor = falcon_actor("inner");
-    let outer_actor = Actor::<String>::new("outer".to_string());
+    let outer_actor = Actor::<String>::new("outer".to_string(), crate::AlgKind::Ed25519).unwrap();
 
     let inner_token = Token::new(
         "inner.com".to_string(),
@@ -386,7 +397,8 @@ fn test_pre_pass_fails_before_resolver_invoked() {
         Duration::from_secs(30),
         inner_actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed_inner = inner_actor.sign_token(inner_token).unwrap();
 
     let mut inner_resolver = TestResolver::new("inner.com");
@@ -412,7 +424,7 @@ fn test_pre_pass_fails_before_resolver_invoked() {
 
 #[test]
 fn test_falcon_tampered_signature_rejected() {
-    use base64::prelude::*;
+    use base64::{Engine as _, prelude::BASE64_STANDARD};
     use futures::executor::block_on;
 
     let host = "h".to_string();
@@ -425,7 +437,8 @@ fn test_falcon_tampered_signature_rejected() {
         Duration::from_secs(30),
         actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed = actor.sign_token(token).unwrap();
     let jwt = signed.jwt();
 
@@ -449,7 +462,7 @@ fn test_falcon_tampered_signature_rejected() {
 
 #[test]
 fn test_falcon_tampered_message_rejected() {
-    use base64::prelude::*;
+    use base64::{Engine as _, prelude::BASE64_STANDARD};
     use futures::executor::block_on;
 
     let host = "h".to_string();
@@ -462,7 +475,8 @@ fn test_falcon_tampered_message_rejected() {
         Duration::from_secs(30),
         actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed = actor.sign_token(token).unwrap();
     let jwt = signed.jwt();
 
@@ -506,7 +520,8 @@ fn test_falcon_expired_token_rejected() {
         Duration::from_secs(30),
         actor.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed = actor.sign_token(token).unwrap();
 
     let mut resolver = TestResolver::new(host.clone());
@@ -553,7 +568,8 @@ fn test_falcon_actor_id_mismatch_rejected() {
         Duration::from_secs(30),
         alice.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed = alice.sign_token(token).unwrap();
 
     let different_actor =
@@ -581,17 +597,19 @@ struct CustomContextBackend;
 
 impl Falcon512Backend for CustomContextBackend {
     const FALCON_CONTEXT: &[u8] = b"other-protocol";
+
     fn generate() -> Result<Falcon512KeyPair, Error> {
         FalconBackend::generate()
     }
 
     fn sign(sk: &Falcon512PrivateKey, msg: &[u8]) -> Result<Falcon512Signature, Error> {
-        use crate::sig::falcon::default_backend as dbe;
         use ::falcon::falcon::{
             FALCON_SIG_PADDED, falcon_sign_dyn_finish, falcon_sign_start, falcon_tmpsize_signdyn,
         };
         use ::falcon::shake::InnerShake256Context;
         use zeroize::Zeroizing;
+
+        use crate::sig::falcon::default_backend as dbe;
 
         const LOGN: u32 = 9;
         const SIG_LEN: usize = sig::falcon::SIGNATURE_LEN;
@@ -628,11 +646,12 @@ impl Falcon512Backend for CustomContextBackend {
     }
 
     fn verify(pk: &Falcon512PublicKey, msg: &[u8], sig: &Falcon512Signature) -> Result<(), Error> {
-        use crate::sig::falcon::default_backend as dbe;
         use ::falcon::falcon::{
             FALCON_SIG_PADDED, falcon_tmpsize_verify, falcon_verify_finish, falcon_verify_start,
         };
         use ::falcon::shake::InnerShake256Context;
+
+        use crate::sig::falcon::default_backend as dbe;
 
         const LOGN: u32 = 9;
 
@@ -667,7 +686,7 @@ impl Falcon512Backend for CustomContextBackend {
 }
 
 fn make_forged_jwt_with_context() -> (String, Actor<String>) {
-    use base64::prelude::*;
+    use base64::{Engine as _, prelude::BASE64_STANDARD};
 
     let keypair = FalconBackend::generate().unwrap();
 
@@ -683,7 +702,8 @@ fn make_forged_jwt_with_context() -> (String, Actor<String>) {
         Duration::from_secs(30),
         "alice".to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
 
     let header_json =
         serde_json::to_string(&token::TokenHeader::for_alg(sig::AlgKind::Falcon512)).unwrap();
@@ -730,12 +750,15 @@ fn test_alg_header_matches_actor_key_mismatch() {
         Duration::from_secs(30),
         falcon.id().to_string(),
         (),
-    );
+    )
+    .expect("valid token time");
     let signed = falcon.sign_token(token).unwrap();
 
     let ed25519_actor = Actor::with_verifying_key(
         "alice".to_string(),
-        Actor::<String>::new("alice".to_string()).verifying_key(),
+        Actor::<String>::new("alice".to_string(), crate::AlgKind::Ed25519)
+            .unwrap()
+            .verifying_key(),
     );
 
     let mut resolver = TestResolver::new(host.clone());

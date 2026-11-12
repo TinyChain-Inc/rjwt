@@ -3,7 +3,6 @@ use std::future::Future;
 use std::time::{Duration, SystemTime};
 
 use futures::executor::block_on;
-
 use rjwt_core::{Actor, Error, Resolve, SignedToken, Token};
 
 #[derive(Clone)]
@@ -53,24 +52,24 @@ impl Resolve for Resolver {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Error> {
     let now = SystemTime::now();
 
     let bobs_id = "bob".to_string();
     let example_dot_com = "example.com".to_string();
 
-    let actor_bob = Actor::new(bobs_id.clone());
+    let actor_bob = Actor::new(bobs_id.clone(), rjwt_core::AlgKind::Ed25519)?;
     let example = Resolver::new(example_dot_com.clone(), [actor_bob.clone()], vec![]);
 
     let retailer_dot_com = "retailer.com".to_string();
-    let retail_app = Actor::new("app".to_string());
+    let retail_app = Actor::new("app".to_string(), rjwt_core::AlgKind::Ed25519)?;
     let retailer = Resolver::new(
         retailer_dot_com.clone(),
         [retail_app.clone()],
         vec![example.clone()],
     );
 
-    let bank_account = Actor::new("bank".to_string());
+    let bank_account = Actor::new("bank".to_string(), rjwt_core::AlgKind::Ed25519)?;
     let bank = Resolver::new(
         "bank.com".to_string(),
         [bank_account.clone()],
@@ -85,12 +84,12 @@ fn main() {
         Duration::from_secs(30),
         actor_bob.id().to_string(),
         bobs_claim.clone(),
-    );
+    )?;
 
-    let bobs_token = actor_bob.sign_token(bobs_token).expect("signed token");
+    let bobs_token = actor_bob.sign_token(bobs_token)?;
 
     let bobs_token: SignedToken<String, String, String> =
-        block_on(retailer.verify(bobs_token.into_jwt(), now)).expect("claims");
+        block_on(retailer.verify(bobs_token.into_jwt(), now))?;
 
     assert!(
         bobs_token
@@ -101,14 +100,12 @@ fn main() {
     );
 
     let retailer_claim = String::from("Bob spent $1 on retailer.com");
-    let retailer_token = retail_app
-        .consume_and_sign(
-            bobs_token,
-            retailer_dot_com.clone(),
-            retailer_claim.clone(),
-            now,
-        )
-        .expect("signed token");
+    let retailer_token = retail_app.consume_and_sign(
+        bobs_token,
+        retailer_dot_com.clone(),
+        retailer_claim.clone(),
+        now,
+    )?;
 
     assert_eq!(
         retailer_token
@@ -125,7 +122,7 @@ fn main() {
     );
 
     let retailer_token_as_received: SignedToken<String, String, String> =
-        block_on(bank.verify(retailer_token.jwt().to_string(), now)).expect("claims");
+        block_on(bank.verify(retailer_token.jwt().to_string(), now))?;
 
     assert_eq!(retailer_token, retailer_token_as_received);
 
@@ -146,4 +143,5 @@ fn main() {
     );
 
     println!("OK: chain verified — Bob → retailer.com → bank.com");
+    Ok(())
 }

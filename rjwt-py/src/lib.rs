@@ -78,10 +78,9 @@ use pathlink::{Link, PathBuf as LinkBuf};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use rjwt_core::Error;
 use serde::{Deserialize, Serialize};
 use umask::Mode;
-
-use rjwt_core::Error;
 
 /// Host identifier type: a typed URL / host address.
 pub(crate) type H = Link;
@@ -114,8 +113,12 @@ pub(crate) fn to_py_err(e: Error) -> PyErr {
     PyRuntimeError::new_err(e.to_string())
 }
 
-pub(crate) fn unix_to_system_time(unix_secs: f64) -> SystemTime {
-    UNIX_EPOCH + Duration::from_secs_f64(unix_secs)
+pub(crate) fn unix_to_system_time(unix_secs: f64) -> PyResult<SystemTime> {
+    let duration = Duration::try_from_secs_f64(unix_secs)
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    UNIX_EPOCH
+        .checked_add(duration)
+        .ok_or_else(|| PyValueError::new_err("timestamp exceeds system time range"))
 }
 
 pub(crate) fn system_time_to_unix(t: SystemTime) -> f64 {
@@ -154,6 +157,7 @@ pub(crate) fn claims_to_py(py: Python<'_>, claims: &C) -> PyResult<Py<PyAny>> {
 
 #[pymodule]
 fn rjwt(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("DEFAULT_ALGORITHM", rjwt_core::DEFAULT_ALGORITHM.name())?;
     m.add_class::<actor::PyActor>()?;
     m.add_class::<token::PyToken>()?;
     m.add_class::<token::PySignedToken>()?;

@@ -3,15 +3,20 @@ use std::str::FromStr;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
-
-use rjwt_core::{Actor, AlgKind, Error, SigningKey, VerifyingKey};
+use rjwt_core::{Actor, AlgKind, DEFAULT_ALGORITHM, Error, SigningKey, VerifyingKey};
 
 use crate::token::{PySignedToken, PyToken};
 use crate::{A, H, py_to_claims, to_py_err, unix_to_system_time};
 
 fn parse_alg(alg: Option<&str>) -> PyResult<AlgKind> {
-    match alg.unwrap_or("falcon512").to_ascii_lowercase().as_str() {
-        "falcon512" | "falcon-512" | "fn-dsa-512" => Ok(AlgKind::Falcon512),
+    let Some(alg) = alg else {
+        return Ok(DEFAULT_ALGORITHM);
+    };
+
+    match alg.to_ascii_lowercase().as_str() {
+        "falcon512" | "falcon-512" | "fn-dsa-512" => "falcon512"
+            .parse::<AlgKind>()
+            .map_err(|error| PyValueError::new_err(error.to_string())),
         "ed25519" | "eddsa" => Ok(AlgKind::Ed25519),
         other => Err(PyValueError::new_err(format!(
             "unsupported signature algorithm: {other}"
@@ -31,13 +36,15 @@ pub(crate) struct PyActor(pub(crate) Actor<A>);
 impl PyActor {
     /// Create an Actor with a newly-generated signing keypair.
     #[new]
-    fn new(id: &str) -> PyResult<Self> {
+    #[pyo3(signature = (id, alg=None))]
+    fn new(id: &str, alg: Option<&str>) -> PyResult<Self> {
         let id = A::from_str(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
-        Ok(Self(Actor::new(id)))
+        Actor::new(id, parse_alg(alg)?).map(Self).map_err(to_py_err)
     }
 
     /// Create an Actor from private-key bytes.
     #[staticmethod]
+    #[pyo3(signature = (id, private_key, alg=None))]
     fn with_keypair(
         id: &str,
         #[gen_stub(override_type(type_repr = "bytes"))] private_key: &[u8],
@@ -52,6 +59,7 @@ impl PyActor {
 
     /// Create an Actor from public-key bytes (verify-only, cannot sign).
     #[staticmethod]
+    #[pyo3(signature = (id, public_key, alg=None))]
     fn with_public_key(
         id: &str,
         #[gen_stub(override_type(type_repr = "bytes"))] public_key: &[u8],
@@ -62,14 +70,6 @@ impl PyActor {
         let key = VerifyingKey::from_bytes(alg, public_key)
             .map_err(|e: Error| PyValueError::new_err(e.to_string()))?;
         Ok(Self(Actor::with_verifying_key(id, key)))
-    }
-
-    #[cfg(feature = "falcon")]
-    #[staticmethod]
-    fn new_falcon512(id: &str) -> PyResult<Self> {
-        let id = A::from_str(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let actor = Actor::new_falcon512(id).map_err(|e| PyValueError::new_err(e.to_string()))?;
-        Ok(Self(actor))
     }
 
     /// Return the actor identifier as a string
@@ -84,7 +84,7 @@ impl PyActor {
 
     /// Return public-key bytes.
     fn public_key_bytes(&self) -> Vec<u8> {
-        self.0.verifying_key().to_bytes().to_vec()
+        self.0.verifying_key().to_bytes()
     }
 
     /// Return private-key bytes.
@@ -118,7 +118,7 @@ impl PyActor {
     ) -> PyResult<PySignedToken> {
         let host_id = H::from_str(host_id).map_err(|e| PyValueError::new_err(e.to_string()))?;
         let claims = py_to_claims(claims)?;
-        let now = unix_to_system_time(now_unix);
+        let now = unix_to_system_time(now_unix)?;
         self.0
             .consume_and_sign(token.0.clone(), host_id, claims, now)
             .map(PySignedToken)

@@ -3,8 +3,7 @@ use std::pin::Pin;
 use std::time::SystemTime;
 
 use futures::Future;
-use serde::Serialize;
-use serde::de::DeserializeOwned;
+use serde::{Serialize, de::DeserializeOwned};
 
 use crate::actor::Actor;
 use crate::claims::Claims;
@@ -13,7 +12,9 @@ use crate::sig::AlgKind;
 use crate::token::{SignedToken, Token, decode_header_and_inherit, decode_token, token_signature};
 
 type ResolveResult<A> = Result<Actor<A>, Error>;
+
 type VerifyResult<H, A, C> = Result<SignedToken<H, A, C>, Error>;
+
 type Verification<'a, H, A, C> =
     Pin<Box<dyn Future<Output = Result<Claims<H, A, C>, Error>> + Send + 'a>>;
 
@@ -91,7 +92,7 @@ where
         ));
     }
 
-    if let Err(cause) = actor.verifying_key().verify(message.as_bytes(), &signature) {
+    if let Err(cause) = actor.verify(message.as_bytes(), &signature) {
         Err(Error::auth(format!("invalid bearer token: {cause}")))
     } else {
         Ok(token)
@@ -113,20 +114,9 @@ where
         if let Some(parent) = token.inherit {
             let parent_claims = verify_claims(resolver, &parent, now).await?;
 
-            if token.exp <= parent_claims.exp {
-                parent_claims.consume(token.iss, token.actor_id, token.custom)
-            } else {
-                Err(Error::Time(
-                    "cannot extend the expiration time of a recursive token".to_owned(),
-                ))
-            }
+            parent_claims.consume(token.exp, token.iss, token.actor_id, token.custom)
         } else {
-            Ok(Claims::new(
-                token.exp,
-                token.iss,
-                token.actor_id,
-                token.custom,
-            ))
+            Claims::new(token.exp, token.iss, token.actor_id, token.custom)
         }
     })
 }

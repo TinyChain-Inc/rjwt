@@ -3,9 +3,9 @@
 //! on the JWT spec.
 //!
 //! Two signature algorithms are supported:
-//! - Ed25519 (EdDSA), via the [`ed25519_dalek`] crate — the default.
+//! - Ed25519 (EdDSA), via the [`ed25519_dalek`] crate — the default without `falcon`.
 //! - Falcon-512 (FN-DSA-512), a post-quantum lattice signature, behind the `falcon`
-//!   feature flag — gated by [`Actor::new_falcon512`].
+//!   feature flag (enabled by default) — selected by [`DEFAULT_ALGORITHM`].
 //!
 //! This library differs from other JWT implementations in that it allows for recursive [`Token`]s.
 //!
@@ -29,3 +29,12 @@ pub use rand::rngs::OsRng;
 pub use resolve::Resolve;
 pub use sig::{AlgKind, Signature, SigningKey, VerifyingKey};
 pub use token::{SignedToken, Token};
+
+/// Default for actor construction and omitted key-import algorithms.
+/// Falcon512 when `falcon` is enabled (the default feature configuration).
+#[cfg(feature = "falcon")]
+pub const DEFAULT_ALGORITHM: AlgKind = AlgKind::Falcon512;
+
+/// Default for actor construction and omitted key-import algorithms without Falcon.
+#[cfg(not(feature = "falcon"))]
+pub const DEFAULT_ALGORITHM: AlgKind = AlgKind::Ed25519;

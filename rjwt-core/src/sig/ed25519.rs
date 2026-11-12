@@ -1,4 +1,4 @@
-use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH, SIGNATURE_LENGTH, Signer, Verifier};
+use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH, SIGNATURE_LENGTH, Signer};
 use rand::rngs::OsRng;
 
 use super::AlgKind;
@@ -50,7 +50,11 @@ impl Ed25519VerifyingKey {
                 bytes.len()
             ))
         })?;
-        Ok(Self(ed25519_dalek::VerifyingKey::from_bytes(arr)?))
+        let key = ed25519_dalek::VerifyingKey::from_bytes(arr)?;
+        if key.is_weak() {
+            return Err(Error::auth("invalid Ed25519 verifying key"));
+        }
+        Ok(Self(key))
     }
 
     pub fn to_bytes(&self) -> [u8; PUBLIC_KEY_LENGTH] {
@@ -58,7 +62,7 @@ impl Ed25519VerifyingKey {
     }
 
     pub fn verify(&self, msg: &[u8], sig: &Ed25519Signature) -> Result<(), Error> {
-        self.0.verify(msg, &sig.0).map_err(Error::from)
+        self.0.verify_strict(msg, &sig.0).map_err(Error::from)
     }
 }
 
